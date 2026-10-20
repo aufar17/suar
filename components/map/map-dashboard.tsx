@@ -10,10 +10,12 @@ import { Card } from "@/components/ui/card";
 import { addDaysIso, formatDayShort, formatDecimal, formatInteger } from "@/lib/format";
 import { useJson } from "@/lib/use-json";
 import type { ClusterCollection, DataStatus, HotspotCollection, RegionBoundaryCollection, RegionWeather } from "@/types";
-import { HotspotGlyph } from "./legend-icons";
+import { ClusterDetail } from "@/components/panels/detail-panel";
+import { HotspotGlyph, ZoneGlyph } from "./legend-icons";
 import { MapLegend } from "./map-legend";
 import { MapSkeleton } from "./map-skeleton";
 import { MapStatus, type MapStatusItem } from "./map-status";
+import type { MapSelection } from "./selection";
 import { useMapFilters } from "./use-map-filters";
 
 const DashboardMap = dynamic(() => import("./dashboard-map"), {
@@ -23,6 +25,7 @@ const DashboardMap = dynamic(() => import("./dashboard-map"), {
 
 const LAYERS: LayerOption[] = [
   { key: "hotspot", label: "Hotspot", description: "Titik panas satelit", icon: <HotspotGlyph size={10} /> },
+  { key: "zona", label: "Zona kebakaran", description: "Kelompok hotspot hari terakhir", icon: <ZoneGlyph /> },
 ];
 
 function countBy<T>(items: T[], key: (item: T) => string): Map<string, number> {
@@ -34,6 +37,12 @@ function countBy<T>(items: T[], key: (item: T) => string): Map<string, number> {
 export function MapDashboard({ status }: { status: DataStatus }) {
   const { filters, setFilters, toggleLayer } = useMapFilters();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [selection, setSelection] = useState<MapSelection | null>(null);
+
+  const select = (next: MapSelection | null) => {
+    setSelection(next);
+    if (next) setSheetOpen(true);
+  };
 
   const end = status.tanggal_data;
   const start = addDaysIso(end, -(filters.rentang - 1));
@@ -94,6 +103,19 @@ export function MapDashboard({ status }: { status: DataStatus }) {
 
   const visibleLayers = filters.lapisan.filter((key) => LAYERS.some((layer) => layer.key === key));
 
+  if (filters.lapisan.includes("zona") && clusters.error) {
+    statusItems.push({ kind: "error", message: `Gagal memuat zona kebakaran. ${clusters.error}`, onRetry: clusters.retry });
+  }
+
+  const detail =
+    selection?.kind === "cluster" ? (
+      <ClusterDetail
+        feature={selection.feature}
+        regionName={regionNames[selection.feature.properties.kabupaten] ?? selection.feature.properties.kabupaten}
+        onClose={() => setSelection(null)}
+      />
+    ) : null;
+
   const sheetTitle =
     hotspotCount === undefined
       ? "Ringkasan"
@@ -126,7 +148,10 @@ export function MapDashboard({ status }: { status: DataStatus }) {
             label="Peta hotspot dan risiko karhutla Provinsi Riau"
             layers={filters.lapisan}
             hotspots={hotspots.data}
+            clusters={clusters.data}
             regionNames={regionNames}
+            selection={selection}
+            onSelectCluster={(feature) => select({ kind: "cluster", feature })}
           />
 
           <LayerChips
@@ -146,12 +171,13 @@ export function MapDashboard({ status }: { status: DataStatus }) {
 
         <aside aria-label="Detail" className="hidden min-h-0 flex-col gap-4 overflow-y-auto xl:flex">
           <Card className="p-4">
-            <p className="text-sm text-fg-muted">Klik kotak grid di peta untuk melihat detail risiko.</p>
+            {detail ?? <p className="text-sm text-fg-muted">Klik zona kebakaran atau kotak grid di peta untuk melihat detail.</p>}
           </Card>
         </aside>
 
         <BottomSheet className="xl:hidden" open={sheetOpen} onOpenChange={setSheetOpen} title={sheetTitle}>
           <div className="flex flex-col gap-5">
+            {detail ? <div className="rounded-card border border-line p-4">{detail}</div> : null}
             <SummaryCards items={summary} compact />
             <TimeRangeControl value={filters.rentang} onChange={(rentang) => setFilters({ rentang })} hint={rangeHint} />
             <ConfidenceControl value={filters.conf} onChange={(conf) => setFilters({ conf })} />
