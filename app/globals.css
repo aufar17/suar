@@ -1,0 +1,117 @@
+@import "tailwindcss";
+
+/* Dark mode follows the data-theme attribute set on <html> by the theme script. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+
+  --bg: #f3f4f0;
+  --surface: #ffffff;
+  --surface-2: #eceee8;
+  --line: #dcdfd8;
+  --fg: #1c2321;
+  --fg-muted: #4f5752;
+  --primary: #1f3b36;
+  --primary-fg: #ffffff;
+  --primary-soft: #e3ebe8;
+  --accent: #c2521f;
+  --accent-fg: #ffffff;
+  --focus: #c2521f;
+
+  /* Risk scale. "rendah" is intentionally transparent on the map. */
+  --risk-rendah: transparent;
+  --risk-rendah-badge: #e6e9e3;
+  --risk-rendah-fg: #1c2321;
+  --risk-sedang: #f3d27a;
+  --risk-sedang-fg: #1c2321;
+  --risk-tinggi: #e98a3d;
+  --risk-tinggi-fg: #1c2321;
+  --risk-sangat-tinggi: #9e2f1c;
+  --risk-sangat-tinggi-fg: #ffffff;
+
+  /* Map overlays */
+  --map-hotspot: #1c2321;
+  --map-hotspot-stroke: #ffffff;
+  --map-cluster: #1c2321;
+  --map-boundary: #1f3b36;
+  --map-gambut: #7a6a3a;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #111614;
+  --surface: #1a201e;
+  --surface-2: #232b28;
+  --line: #2f3834;
+  --fg: #e8eae5;
+  --fg-muted: #a9b0ab;
+  --primary: #8fc2b5;
+  --primary-fg: #0f1a17;
+  --primary-soft: #23332f;
+  --accent: #e57f4a;
+  --accent-fg: #160b05;
+  --focus: #e57f4a;
+
+  --risk-rendah: transparent;
+  --risk-rendah-badge: #2f3834;
+  --risk-rendah-fg: #e8eae5;
+  --risk-sedang: #f3d27a;
+  --risk-sedang-fg: #1c2321;
+  --risk-tinggi: #e98a3d;
+  --risk-tinggi-fg: #1c2321;
+  --risk-sangat-tinggi: #b5402a;
+  --risk-sangat-tinggi-fg: #ffffff;
+
+  --map-hotspot: #f3f4f0;
+  --map-hotspot-stroke: #1c2321;
+  --map-cluster: #f3f4f0;
+  --map-boundary: #8fc2b5;
+  --map-gambut: #c9b67a;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-primary: var(--primary);
+  --color-primary-fg: var(--primary-fg);
+  --color-primary-soft: var(--primary-soft);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-focus: var(--focus);
+
+  --color-risk-rendah: var(--risk-rendah-badge);
+  --color-risk-rendah-fg: var(--risk-rendah-fg);
+  --color-risk-sedang: var(--risk-sedang);
+  --color-risk-sedang-fg: var(--risk-sedang-fg);
+  --color-risk-tinggi: var(--risk-tinggi);
+  --color-risk-tinggi-fg: var(--risk-tinggi-fg);
+  --color-risk-sangat-tinggi: var(--risk-sangat-tinggi);
+  --color-risk-sangat-tinggi-fg: var(--risk-sangat-tinggi-fg);
+
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+
+  --radius-card: 12px;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
