@@ -101,10 +101,130 @@
   --radius-card: 12px;
 }
 
+:root {
+  /* Must match the header rows: mobile 56px + 44px nav, desktop 64px, plus 1px border. */
+  --header-h: 101px;
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --header-h: 65px;
+  }
+}
+
 html,
 body {
   background: var(--bg);
   color: var(--fg);
+}
+
+/* Leaflet tweaks ------------------------------------------------------- */
+
+.leaflet-container {
+  font-family: var(--font-sans);
+  background: var(--surface-2);
+}
+
+/* Night-friendly basemap without a second tile provider. */
+[data-theme="dark"] .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.85) saturate(0.5);
+}
+
+/* 44px touch targets for zoom buttons. */
+.leaflet-touch .leaflet-bar a,
+.leaflet-bar a {
+  width: 44px;
+  height: 44px;
+  line-height: 44px;
+  font-size: 20px;
+}
+
+.leaflet-bar a,
+.leaflet-bar a:hover {
+  background: var(--surface);
+  color: var(--fg);
+  border-bottom-color: var(--line);
+}
+
+.leaflet-bar a:hover {
+  background: var(--surface-2);
+}
+
+.leaflet-touch .leaflet-bar,
+.leaflet-bar {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: none;
+  overflow: hidden;
+}
+
+.leaflet-control-attribution {
+  font-size: 11px;
+}
+
+[data-theme="dark"] .leaflet-control-attribution {
+  background: rgb(26 32 30 / 0.85);
+  color: var(--fg-muted);
+}
+
+[data-theme="dark"] .leaflet-control-attribution a {
+  color: var(--primary);
+}
+
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: var(--surface);
+  color: var(--fg);
+  box-shadow: 0 2px 10px rgb(0 0 0 / 0.15);
+}
+
+.leaflet-popup-content-wrapper {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.leaflet-popup-content {
+  margin: 12px 14px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.leaflet-container a.leaflet-popup-close-button {
+  width: 32px;
+  height: 32px;
+  font-size: 20px;
+  line-height: 30px;
+  color: var(--fg-muted);
+}
+
+.leaflet-tooltip {
+  background: var(--surface);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: none;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* On small screens the map is overlaid by the layer chips (top) and the bottom sheet. */
+@media (max-width: 1279px) {
+  .map-frame .leaflet-top {
+    top: var(--map-top-inset, 0px);
+  }
+
+  .map-frame .leaflet-bottom {
+    bottom: var(--map-bottom-inset, 0px);
+  }
+}
+
+/* Hide scrollbars on horizontally scrolling chip rows but keep them scrollable. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 body {
