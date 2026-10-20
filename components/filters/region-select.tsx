@@ -1,42 +1,53 @@
 "use client";
 
+import { Loader2, MapPin } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useId, useTransition } from "react";
+import { useTransition } from "react";
+import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 import type { Region } from "@/types";
 
+const ALL = "semua";
+
 /** Region filter stored in the `kabupaten` search param. */
-export function RegionSelect({ regions, value }: { regions: Region[]; value: string | null }) {
-  const id = useId();
+export function RegionSelect({ regions, value, className }: { regions: Region[]; value: string | null; className?: string }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
 
   return (
-    <div className="flex min-w-0 flex-col gap-1">
-      <label htmlFor={id} className="text-xs font-medium text-muted-foreground">
-        Kabupaten/kota
-      </label>
-      <select
-        id={id}
-        value={value ?? ""}
+    <Select
+      value={value ?? ALL}
+      onValueChange={(next) => {
+        const params = new URLSearchParams(searchParams.toString());
+        if (next !== ALL) params.set("kabupaten", next);
+        else params.delete("kabupaten");
+        const query = params.toString();
+        startTransition(() => router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false }));
+      }}
+    >
+      <SelectTrigger
+        aria-label="Filter kabupaten/kota"
         aria-busy={pending}
-        onChange={(event) => {
-          const params = new URLSearchParams(searchParams.toString());
-          if (event.target.value) params.set("kabupaten", event.target.value);
-          else params.delete("kabupaten");
-          const query = params.toString();
-          startTransition(() => router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false }));
-        }}
-        className="min-h-11 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground sm:w-64"
+        className={cn("w-full bg-card sm:w-60", className)}
       >
-        <option value="">Semua (Provinsi Riau)</option>
+        {pending ? (
+          <Loader2 aria-hidden="true" className="animate-spin text-muted-foreground" />
+        ) : (
+          <MapPin aria-hidden="true" className="text-muted-foreground" />
+        )}
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent position="popper" className="max-h-80">
+        <SelectItem value={ALL}>Semua (Provinsi Riau)</SelectItem>
+        <SelectSeparator />
         {regions.map((region) => (
-          <option key={region.slug} value={region.slug}>
+          <SelectItem key={region.slug} value={region.slug}>
             {region.nama}
-          </option>
+          </SelectItem>
         ))}
-      </select>
-    </div>
+      </SelectContent>
+    </Select>
   );
 }

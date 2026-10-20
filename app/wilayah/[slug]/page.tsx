@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { MonthlyBarChart } from "@/components/charts/monthly-bar-chart";
+import { MonthlyBarChart } from "@/components/charts/lazy";
 import { RiskForecastChart } from "@/components/charts/risk-forecast-chart";
 import { RegionMapPanel } from "@/components/map/region-map-panel";
 import { PredictionNote } from "@/components/panels/risk-detail";

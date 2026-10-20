@@ -64,12 +64,12 @@
   --map-selection: #e8590c;
   --map-selection-halo: #ffffff;
 
-  /* Charts (year palette validated with the dataviz checks). */
-  --chart-1: #27272a;
-  --chart-2: #e8590c;
-  --chart-3: #0e826b;
-  --chart-4: #7584c9;
-  --chart-5: #a1a1aa;
+  /* Charts (validated with the dataviz checks, light & dark). Single hotspot series = ember. */
+  --chart-1: #e8590c;
+  --chart-2: #0e826b;
+  --chart-3: #7584c9;
+  --chart-4: #a1a1aa;
+  --chart-5: #71717a;
   --chart-grid: #ececee;
   --chart-year-current: #e8590c;
   --chart-year-1: #0e826b;
@@ -127,13 +127,13 @@
   --map-selection: #f97a3c;
   --map-selection-halo: #09090b;
 
-  --chart-1: #e4e4e7;
-  --chart-2: #f97a3c;
-  --chart-3: #239e83;
-  --chart-4: #7f8cd6;
-  --chart-5: #71717a;
+  --chart-1: #e8590c;
+  --chart-2: #239e83;
+  --chart-3: #7f8cd6;
+  --chart-4: #71717a;
+  --chart-5: #52525b;
   --chart-grid: #232327;
-  --chart-year-current: #f07040;
+  --chart-year-current: #e8590c;
   --chart-year-1: #239e83;
   --chart-year-2: #7f8cd6;
 }

@@ -1,38 +1,40 @@
 "use client";
 
-import { clsx } from "clsx";
+import { Download } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import { downloadCsv, toCsv } from "@/lib/csv";
-import { DownloadIcon } from "./icons";
 
 type Cell = string | number | boolean | null | undefined;
 
-/** Builds a CSV from data already loaded in the page and downloads it. */
+/** Builds a CSV from data already loaded in the page, downloads it, and confirms with a toast. */
 export function DownloadCsvButton({
   filename,
   header,
   rows,
   label = "Unduh CSV",
-  variant = "primary",
+  variant = "default",
+  className,
 }: {
   filename: string;
   header: string[];
   rows: Cell[][];
   label?: string;
-  variant?: "primary" | "ghost";
+  variant?: "default" | "outline" | "ghost";
+  className?: string;
 }) {
+  const download = () => {
+    try {
+      downloadCsv(filename, toCsv(header, rows));
+      toast.success("CSV berhasil diunduh", { description: `${filename} · ${rows.length} baris` });
+    } catch {
+      toast.error("CSV gagal dibuat", { description: "Coba lagi beberapa saat lagi." });
+    }
+  };
   return (
-    <button
-      type="button"
-      onClick={() => downloadCsv(filename, toCsv(header, rows))}
-      className={clsx(
-        "inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg px-4 text-sm font-medium",
-        variant === "primary"
-          ? "bg-primary text-primary-foreground hover:opacity-90"
-          : "border border-border text-foreground hover:bg-muted",
-      )}
-    >
-      <DownloadIcon className="size-4" />
+    <Button variant={variant} onClick={download} className={className}>
+      <Download />
       {label}
-    </button>
+    </Button>
   );
 }

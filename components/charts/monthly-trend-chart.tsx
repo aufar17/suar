@@ -1,64 +1,90 @@
 "use client";
 
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, CartesianGrid, ReferenceDot, XAxis, YAxis } from "recharts";
+import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
 import { formatInteger, formatMonth } from "@/lib/format";
 import type { MonthlyTrend } from "@/types";
-import { AXIS_TICK, ChartTable, ChartTooltip, GRID_STROKE } from "./chart-parts";
+import { AXIS_TICK, ChartTable, ChartTooltipCard, GRID_STROKE, useChartAnimation } from "./chart-parts";
 
-/** Single series: hotspots per month. The card title names it, so there is no legend. */
-export function MonthlyTrendChart({
-  data,
-  height = 280,
-  seriesName = "Hotspot",
-}: {
-  data: MonthlyTrend[];
-  height?: number;
-  seriesName?: string;
-}) {
+const config = { jumlah_hotspot: { label: "Hotspot", color: "var(--chart-1)" } } satisfies ChartConfig;
+
+/** Single series: hotspots per month. The card title names it, so there is no legend; the peak is labelled. */
+export default function MonthlyTrendChart({ data, height = 300 }: { data: MonthlyTrend[]; height?: number }) {
+  const animation = useChartAnimation();
   const peak = data.reduce<MonthlyTrend | null>((max, d) => (!max || d.jumlah_hotspot > max.jumlah_hotspot ? d : max), null);
   const ariaLabel = peak
-    ? `Grafik garis jumlah hotspot per bulan, ${formatMonth(data[0].bulan)} sampai ${formatMonth(data[data.length - 1].bulan)}. Puncak ${formatMonth(peak.bulan)} dengan ${formatInteger(peak.jumlah_hotspot)} hotspot.`
-    : "Grafik garis jumlah hotspot per bulan";
+    ? `Grafik area jumlah hotspot per bulan, ${formatMonth(data[0].bulan)} sampai ${formatMonth(data[data.length - 1].bulan)}. Puncak ${formatMonth(peak.bulan)} dengan ${formatInteger(peak.jumlah_hotspot)} hotspot.`
+    : "Grafik area jumlah hotspot per bulan";
   return (
     <div>
-      <div style={{ height }} role="img" aria-label={ariaLabel}>
-        <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 640, height }}>
-          <LineChart accessibilityLayer={false} data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+      <div role="img" aria-label={ariaLabel}>
+        <ChartContainer config={config} className="aspect-auto w-full" style={{ height }} initialDimension={{ width: 720, height }}>
+          <AreaChart accessibilityLayer={false} data={data} margin={{ top: 24, right: 12, bottom: 0, left: 0 }}>
+            <defs>
+              <linearGradient id="trend-fill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--color-jumlah_hotspot)" stopOpacity={0.22} />
+                <stop offset="100%" stopColor="var(--color-jumlah_hotspot)" stopOpacity={0.02} />
+              </linearGradient>
+            </defs>
             <CartesianGrid vertical={false} stroke={GRID_STROKE} />
             <XAxis
               dataKey="bulan"
-              tickFormatter={(v: string) => formatMonth(v, v.endsWith("-01")).replace(" ", " ")}
-              tick={AXIS_TICK}
-              tickLine={false}
-              axisLine={{ stroke: "var(--line)" }}
-              interval="preserveStartEnd"
-              minTickGap={16}
-            />
-            <YAxis
-              tickFormatter={(v: number) => formatInteger(v)}
+              tickFormatter={(v: string) => (v.endsWith("-01") ? v.slice(0, 4) : formatMonth(v, false))}
               tick={AXIS_TICK}
               tickLine={false}
               axisLine={false}
-              width={48}
+              interval="preserveStartEnd"
+              minTickGap={20}
+              tickMargin={8}
             />
-            <Tooltip
-              cursor={{ stroke: "var(--fg-muted)", strokeDasharray: "3 3" }}
-              content={({ active, payload, label }) => (
-                <ChartTooltip active={active} payload={payload} title={label ? formatMonth(String(label)) : ""} />
-              )}
+            <YAxis tickFormatter={(v: number) => formatInteger(v)} tick={AXIS_TICK} tickLine={false} axisLine={false} width={44} />
+            <ChartTooltip
+              cursor={{ stroke: "var(--muted-foreground)", strokeWidth: 1, strokeOpacity: 0.5 }}
+              content={({ active, payload, label }) =>
+                active && payload?.length ? (
+                  <ChartTooltipCard
+                    title={formatMonth(String(label))}
+                    rows={[
+                      {
+                        key: "hotspot",
+                        label: "Hotspot",
+                        value: formatInteger(Number(payload[0].value)),
+                        color: "var(--color-jumlah_hotspot)",
+                      },
+                    ]}
+                  />
+                ) : null
+              }
             />
-            <Line
+            <Area
               type="linear"
               dataKey="jumlah_hotspot"
-              name={seriesName}
-              stroke="var(--chart-line)"
+              stroke="var(--color-jumlah_hotspot)"
               strokeWidth={2}
-              dot={false}
-              activeDot={{ r: 5, stroke: "var(--surface)", strokeWidth: 2, fill: "var(--chart-line)" }}
-              isAnimationActive={false}
+              fill="url(#trend-fill)"
+              activeDot={{ r: 4.5, stroke: "var(--card)", strokeWidth: 2, fill: "var(--color-jumlah_hotspot)" }}
+              {...animation}
             />
-          </LineChart>
-        </ResponsiveContainer>
+            {peak ? (
+              <ReferenceDot
+                x={peak.bulan}
+                y={peak.jumlah_hotspot}
+                r={4}
+                fill="var(--color-jumlah_hotspot)"
+                stroke="var(--card)"
+                strokeWidth={2}
+                label={{
+                  value: `Puncak ${formatMonth(peak.bulan)}`,
+                  position: "top",
+                  offset: 10,
+                  fill: "var(--foreground)",
+                  fontSize: 11,
+                  fontWeight: 500,
+                }}
+              />
+            ) : null}
+          </AreaChart>
+        </ChartContainer>
       </div>
       <ChartTable
         caption="Jumlah hotspot per bulan"

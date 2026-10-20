@@ -1,18 +1,27 @@
 "use client";
 
-import { clsx } from "clsx";
+import { ChevronRight } from "lucide-react";
+import { motion } from "motion/react";
 import Link from "next/link";
 import { useState } from "react";
-import { SegmentedControl } from "@/components/ui/controls";
 import { DownloadCsvButton } from "@/components/ui/download-button";
 import { RiskBadge } from "@/components/ui/risk-badge";
+import { Segmented } from "@/components/ui/segmented";
 import { formatDecimal, formatInteger } from "@/lib/format";
 import { getRiskLevel } from "@/lib/risk";
-import type { RegionStat } from "@/types";
+import { cn } from "@/lib/utils";
+import type { RegionStat, RiskLevel } from "@/types";
 
 type SortKey = "hotspot" | "risiko";
 
-/** Horizontal bar ranking of regions, sortable by hotspot count or mean risk score. */
+const RISK_BAR: Record<RiskLevel, string> = {
+  rendah: "bg-muted-foreground/45",
+  sedang: "bg-risk-sedang",
+  tinggi: "bg-risk-tinggi",
+  sangat_tinggi: "bg-risk-sangat-tinggi",
+};
+
+/** Horizontal bar ranking of regions, sortable by hotspot count or mean risk score. Rows slide when re-sorted. */
 export function RegionRanking({
   stats,
   highlight,
@@ -32,9 +41,9 @@ export function RegionRanking({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <SegmentedControl
-          label="Urutkan berdasarkan"
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Segmented
+          label="Urutkan peringkat berdasarkan"
           value={sort}
           onChange={setSort}
           options={[
@@ -44,45 +53,60 @@ export function RegionRanking({
           className="w-full sm:w-72"
         />
         <DownloadCsvButton
-          variant="ghost"
+          variant="outline"
+          label="CSV"
           filename="siapi-peringkat-kabupaten.csv"
           header={["slug", "nama", "jumlah_hotspot", "rata_skor_risiko"]}
           rows={sorted.map((s) => [s.slug, s.nama, s.jumlah_hotspot, s.rata_skor_risiko])}
+          className="h-9"
         />
       </div>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-xs text-muted-foreground" aria-live="polite">
         {sort === "hotspot" ? `Jumlah hotspot, ${hotspotPeriod}.` : `Rata-rata skor risiko prediksi untuk ${riskDateLabel}.`}
       </p>
-      <ol className="flex flex-col gap-1">
+      <ol className="flex flex-col">
         {sorted.map((region, index) => {
           const value = sort === "hotspot" ? region.jumlah_hotspot / maxHotspot : region.rata_skor_risiko;
+          const level = getRiskLevel(region.rata_skor_risiko);
           const active = region.slug === highlight;
           return (
-            <li key={region.slug}>
+            <motion.li key={region.slug} layout="position" transition={{ duration: 0.3, ease: [0.2, 0, 0, 1] }}>
               <Link
                 href={`/wilayah/${region.slug}`}
-                className={clsx(
-                  "-mx-2 grid min-h-11 grid-cols-[1.25rem_minmax(0,1fr)_auto] items-center gap-x-3 rounded-lg px-2 py-1.5 hover:bg-muted sm:grid-cols-[1.25rem_minmax(0,9rem)_minmax(0,1fr)_auto]",
-                  active && "bg-muted",
-                )}
                 aria-current={active ? "true" : undefined}
+                className={cn(
+                  "group -mx-2 grid min-h-11 grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-x-3 rounded-lg px-2 py-1.5 transition-colors duration-150 hover:bg-muted/70 sm:grid-cols-[1.5rem_minmax(0,9rem)_minmax(0,1fr)_auto]",
+                  active && "bg-ember-soft hover:bg-ember-soft",
+                )}
               >
-                <span className="row-span-2 font-mono text-xs text-muted-foreground sm:row-span-1">{index + 1}</span>
-                <span className={clsx("truncate text-sm", active ? "font-semibold text-foreground" : "text-foreground")}>{region.nama}</span>
-                <span aria-hidden="true" className="col-start-2 row-start-2 mt-1 h-2 rounded-r-[4px] bg-muted sm:col-start-3 sm:row-start-1 sm:mt-0 sm:h-2.5">
-                  <span
-                    className={clsx("block h-full rounded-r-[4px]", active ? "bg-ember" : "bg-primary")}
-                    style={{ width: `${Math.max(1, value * 100)}%` }}
+                <span className="row-span-2 font-mono text-xs text-muted-foreground tabular-nums sm:row-span-1">{index + 1}</span>
+                <span className={cn("truncate text-sm", active && "font-semibold")}>{region.nama}</span>
+                <span
+                  aria-hidden="true"
+                  className="col-start-2 row-start-2 mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted sm:col-start-3 sm:row-start-1 sm:mt-0 sm:h-2"
+                >
+                  <motion.span
+                    className={cn(
+                      "block h-full rounded-full",
+                      sort === "risiko" ? RISK_BAR[level] : active ? "bg-ember" : "bg-foreground/75",
+                    )}
+                    initial={false}
+                    animate={{ width: `${Math.max(1.5, value * 100)}%` }}
+                    transition={{ duration: 0.3, ease: [0.2, 0, 0, 1] }}
                   />
                 </span>
                 <span className="col-start-3 row-span-2 row-start-1 flex items-center justify-end gap-2 sm:col-start-4 sm:row-span-1">
-                  <span className="w-12 text-right font-mono text-sm text-foreground">
+                  <span className="w-12 text-right font-mono text-sm tabular-nums">
                     {sort === "hotspot" ? formatInteger(region.jumlah_hotspot) : formatDecimal(region.rata_skor_risiko)}
                   </span>
-                  {sort === "risiko" ? <RiskBadge level={getRiskLevel(region.rata_skor_risiko)} size="sm" /> : null}
+                  {sort === "risiko" ? <RiskBadge level={level} size="sm" className="w-[5.5rem] justify-center" /> : null}
+                  <ChevronRight
+                    aria-hidden="true"
+                    className="size-4 text-muted-foreground transition-transform duration-150 group-hover:translate-x-0.5"
+                  />
                 </span>
               </Link>
-            </li>
+            </motion.li>
           );
         })}
       </ol>
