@@ -27,11 +27,11 @@ export function LayerChips({
             aria-pressed={on}
             onClick={() => onToggle(layer.key, !on)}
             className={clsx(
-              "flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-3.5 text-sm font-medium",
+              "flex min-h-11 shrink-0 items-center gap-2 rounded-full border py-1 pr-3.5 pl-2.5 text-sm font-medium",
               on ? "border-primary bg-primary text-primary-fg" : "border-line bg-surface text-fg",
             )}
           >
-            <span className="flex size-4 items-center justify-center">{layer.icon}</span>
+            <span className="flex size-6 items-center justify-center rounded-md bg-surface">{layer.icon}</span>
             {layer.label}
           </button>
         );
