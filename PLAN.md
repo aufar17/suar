@@ -389,3 +389,5 @@ _(Diisi oleh Claude Code selama pengerjaan.)_
 - `Aksen` shadcn (`--accent`) tetap berarti latar hover netral; warna aksen merek bernama `ember` agar tidak bentrok.
 - Font Geist Sans dan Geist Mono lewat `next/font/google`.
 - Halaman `/dev/ui` (noindex, tidak ada di navigasi) menampilkan token dan komponen.
+- *R2 – Layout & navigasi.* Header satu baris 56 px (`--header-h`) di semua lebar layar, sticky dengan `backdrop-blur`. Navigasi desktop mulai `md` (768 px) dengan indikator aktif `motion` (`layoutId`); di bawah `md` navigasi pindah ke Sheet dari kanan. Badge status data: lengkap mulai `lg`, ringkas ("Data contoh") di `md`, versi statis dengan jam lengkap di footer menu mobile (versi tooltip di dalam Sheet ikut terbuka karena fokus otomatis).
+- Command palette (cmdk dalam `CommandDialog`) berisi halaman, 12 kabupaten/kota, dan pilihan tema (terang/gelap/sistem). Bisa dibuka dengan Ctrl/⌘+K, tombol cari di header, atau `openCommandMenu()` (custom event) dari halaman mana pun. Label tombol pintasan menampilkan ⌘ di perangkat Apple dan Ctrl di lainnya (dibaca setelah hidrasi).

@@ -1,35 +1,39 @@
 import Link from "next/link";
-import { getDataStatus } from "@/lib/data";
-import { formatDateTime } from "@/lib/format";
+import { getDataStatus, getRegions } from "@/lib/data";
+import { CommandMenu } from "./command-menu";
+import { DataStatusBadge } from "./data-status-badge";
 import { LogoMark } from "./logo";
+import { MobileNav } from "./mobile-nav";
 import { NavLinks } from "./nav-links";
 import { ThemeToggle } from "./theme";
 
 export async function SiteHeader() {
-  const status = await getDataStatus();
+  const [status, regions] = await Promise.all([getDataStatus(), getRegions()]);
   return (
-    <header className="sticky top-0 z-[1100] flex h-[var(--header-h)] flex-col border-b border-border bg-card">
-      <div className="flex h-14 items-center gap-3 px-4 lg:h-16 lg:px-6">
-        <Link href="/" className="flex min-h-11 min-w-0 items-center gap-2.5" aria-label="SiAPI, ke halaman peta">
-          <LogoMark className="size-8 shrink-0" />
-          <span className="min-w-0">
-            <span className="block text-base leading-tight font-semibold text-foreground">SiAPI</span>
-            <span className="block truncate text-xs text-muted-foreground">Pemantauan &amp; Prediksi Karhutla Riau</span>
+    <header className="sticky top-0 z-40 h-(--header-h) border-b bg-background/80 backdrop-blur-xl backdrop-saturate-150">
+      <div className="flex h-full items-center gap-2 px-3 sm:px-4 lg:px-6">
+        <Link
+          href="/"
+          className="-ml-1 flex h-10 shrink-0 items-center gap-2.5 rounded-lg px-1"
+          aria-label="SiAPI, ke halaman peta"
+        >
+          <LogoMark className="size-7" />
+          <span className="flex items-baseline gap-2">
+            <span className="text-[15px] font-semibold tracking-tight">SiAPI</span>
+            <span className="hidden text-xs text-muted-foreground xl:inline">Karhutla Riau</span>
           </span>
         </Link>
-        <NavLinks variant="desktop" className="ml-6 hidden lg:block" />
-        <div className="ml-auto flex items-center gap-3">
-          <p className="hidden text-right text-xs leading-snug text-muted-foreground md:block">
-            Data terakhir diperbarui
-            <br />
-            <time dateTime={status.terakhir_diperbarui} className="font-mono text-foreground">
-              {formatDateTime(status.terakhir_diperbarui)}
-            </time>
-          </p>
+
+        <span aria-hidden="true" className="mx-2 hidden h-5 w-px bg-border md:block" />
+        <NavLinks className="hidden md:block" />
+
+        <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+          <DataStatusBadge status={status} className="hidden md:inline-flex" />
+          <CommandMenu regions={regions} />
           <ThemeToggle />
+          <MobileNav footer={<DataStatusBadge status={status} detailed />} />
         </div>
       </div>
-      <NavLinks variant="mobile" className="flex h-11 border-t border-border px-2 lg:hidden" />
     </header>
   );
 }
