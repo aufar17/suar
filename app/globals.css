@@ -331,64 +331,16 @@
   display: none;
 }
 
-/* Legacy Leaflet controls (region map until it moves to custom controls). */
-.leaflet-bar,
-.leaflet-touch .leaflet-bar {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: var(--shadow-panel);
-  overflow: hidden;
-}
-
-.leaflet-bar a,
-.leaflet-touch .leaflet-bar a {
-  width: 40px;
-  height: 40px;
-  line-height: 40px;
-  font-size: 18px;
-  background: var(--card);
-  color: var(--foreground);
-  border-bottom-color: var(--border);
-}
-
-.leaflet-bar a:hover {
-  background: var(--muted);
-}
-
-.leaflet-popup-content-wrapper,
-.leaflet-popup-tip {
-  background: var(--popover);
-  color: var(--popover-foreground);
-  box-shadow: var(--shadow-float);
-}
-
-.leaflet-popup-content-wrapper {
-  border: 1px solid var(--border);
-  border-radius: 12px;
-}
-
-.leaflet-popup-content {
-  margin: 12px 14px;
-  font-size: 13px;
-  line-height: 1.45;
-}
-
-.leaflet-tooltip {
-  background: var(--popover);
-  color: var(--popover-foreground);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: none;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-@media (max-width: 1279px) {
-  .map-frame .leaflet-top {
-    top: var(--map-top-inset, 0px);
-  }
-
+/* On small screens the attribution sits above the floating prediction timeline. */
+@media (max-width: 1023px) {
   .map-frame .leaflet-bottom {
     bottom: var(--map-bottom-inset, 0px);
+    transition: bottom 200ms ease;
   }
+}
+
+/* vaul animates drawers over 500ms; keep motion within 150–300ms. */
+[data-vaul-drawer],
+[data-vaul-overlay] {
+  animation-duration: 280ms !important;
 }

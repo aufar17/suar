@@ -48,20 +48,28 @@ function SheetContent({
   children,
   side = "right",
   showCloseButton = true,
+  variant = "default",
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Content> & {
   side?: "top" | "right" | "bottom" | "left"
   showCloseButton?: boolean
+  /** "floating": inset glass panel without overlay, for non-modal use next to a map. */
+  variant?: "default" | "floating"
 }) {
+  const floating = variant === "floating"
   return (
     <SheetPortal>
-      <SheetOverlay />
+      {floating ? null : <SheetOverlay />}
       <SheetPrimitive.Content
         data-slot="sheet-content"
         className={cn(
-          "fixed z-50 flex flex-col gap-4 bg-background shadow-lg transition ease-in-out data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:animate-in data-[state=open]:duration-500",
+          "fixed z-50 flex flex-col gap-4 bg-background shadow-lg transition ease-in-out data-[state=closed]:animate-out data-[state=closed]:duration-200 data-[state=open]:animate-in data-[state=open]:duration-300",
           side === "right" &&
+            !floating &&
             "inset-y-0 right-0 h-full w-3/4 border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm",
+          side === "right" &&
+            floating &&
+            "glass-panel top-[calc(var(--header-h)+0.75rem)] right-3 bottom-3 w-[min(400px,calc(100vw-1.5rem))] rounded-2xl data-[state=closed]:duration-200 data-[state=closed]:slide-out-to-right data-[state=open]:duration-300 data-[state=open]:slide-in-from-right-8 data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0",
           side === "left" &&
             "inset-y-0 left-0 h-full w-3/4 border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm",
           side === "top" &&
@@ -74,7 +82,7 @@ function SheetContent({
       >
         {children}
         {showCloseButton && (
-          <SheetPrimitive.Close className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none data-[state=open]:bg-secondary">
+          <SheetPrimitive.Close className="absolute top-3 right-3 flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden disabled:pointer-events-none pointer-coarse:size-11">
             <XIcon className="size-4" />
             <span className="sr-only">Tutup</span>
           </SheetPrimitive.Close>

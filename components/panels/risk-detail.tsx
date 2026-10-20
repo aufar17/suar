@@ -1,23 +1,32 @@
 "use client";
 
-import { clsx } from "clsx";
-import type { ReactNode } from "react";
+import { CloudRain, Droplets, Info, Sprout, Sun, Thermometer, Wind } from "lucide-react";
+import { motion } from "motion/react";
+import { CountUp } from "@/components/ui/count-up";
 import { RiskBadge } from "@/components/ui/risk-badge";
-import { InfoIcon } from "@/components/ui/icons";
 import { formatDate, formatDayShort, formatDecimal, formatInteger, formatSigned } from "@/lib/format";
 import { FACTOR_LABELS } from "@/lib/labels";
 import { getRiskLabel, RISK_THRESHOLDS } from "@/lib/risk";
-import type { RiskCellFeature, RiskFactor, WeatherSnapshot } from "@/types";
-import { DetailHeader, DetailRows, RegionLink } from "./detail-panel";
+import { cn } from "@/lib/utils";
+import type { RiskCellFeature, RiskFactor, RiskLevel, WeatherSnapshot } from "@/types";
+import { InfoGrid, RegionLink, SectionTitle, type InfoTile } from "./detail-panel";
 
-/** 0–1 track split into the four risk bands, with a marker at the score. */
-export function ScoreBar({ score }: { score: number }) {
-  const bands = [
-    { from: 0, to: RISK_THRESHOLDS.sedang, className: "bg-muted" },
-    { from: RISK_THRESHOLDS.sedang, to: RISK_THRESHOLDS.tinggi, className: "bg-risk-sedang" },
-    { from: RISK_THRESHOLDS.tinggi, to: RISK_THRESHOLDS.sangat_tinggi, className: "bg-risk-tinggi" },
-    { from: RISK_THRESHOLDS.sangat_tinggi, to: 1, className: "bg-risk-sangat-tinggi" },
-  ];
+const FILL_CLASSES: Record<RiskLevel, string> = {
+  rendah: "bg-muted-foreground/60",
+  sedang: "bg-risk-sedang",
+  tinggi: "bg-risk-tinggi",
+  sangat_tinggi: "bg-risk-sangat-tinggi",
+};
+
+const BANDS: { level: RiskLevel; from: number; to: number }[] = [
+  { level: "rendah", from: 0, to: RISK_THRESHOLDS.sedang },
+  { level: "sedang", from: RISK_THRESHOLDS.sedang, to: RISK_THRESHOLDS.tinggi },
+  { level: "tinggi", from: RISK_THRESHOLDS.tinggi, to: RISK_THRESHOLDS.sangat_tinggi },
+  { level: "sangat_tinggi", from: RISK_THRESHOLDS.sangat_tinggi, to: 1 },
+];
+
+/** 0–1 gauge: faint bands for the four levels and a bar that grows to the score. */
+export function ScoreGauge({ score, level }: { score: number; level: RiskLevel }) {
   return (
     <div>
       <div
@@ -26,68 +35,79 @@ export function ScoreBar({ score }: { score: number }) {
         aria-valuemin={0}
         aria-valuemax={1}
         aria-valuenow={score}
-        aria-valuetext={`${formatDecimal(score)} dari 1`}
-        className="relative h-2.5 overflow-visible"
+        aria-valuetext={`${formatDecimal(score)} dari 1, ${getRiskLabel(level)}`}
+        className="relative h-2.5 overflow-hidden rounded-full bg-muted"
       >
-        <div className="flex h-full overflow-hidden rounded-full ring-1 ring-border ring-inset">
-          {bands.map((band) => (
-            <div key={band.from} className={clsx("h-full", band.className)} style={{ width: `${(band.to - band.from) * 100}%` }} />
+        <div aria-hidden="true" className="absolute inset-0 flex">
+          {BANDS.map((band) => (
+            <span
+              key={band.level}
+              className={cn("h-full border-r border-background/80 last:border-r-0", band.level !== "rendah" && FILL_CLASSES[band.level], "opacity-20")}
+              style={{ width: `${(band.to - band.from) * 100}%` }}
+            />
           ))}
         </div>
-        <div
+        <motion.div
           aria-hidden="true"
-          className="absolute -top-1 h-[18px] w-1 -translate-x-1/2 rounded-full bg-foreground ring-2 ring-card"
-          style={{ left: `${Math.min(99, Math.max(1, score * 100))}%` }}
+          className={cn("absolute inset-y-0 left-0 rounded-full", FILL_CLASSES[level])}
+          initial={{ width: 0 }}
+          animate={{ width: `${Math.max(2, score * 100)}%` }}
+          transition={{ duration: 0.3, ease: [0.2, 0, 0, 1] }}
         />
       </div>
-      <div aria-hidden="true" className="mt-1 flex justify-between font-mono text-[11px] text-muted-foreground">
-        <span>0</span>
-        <span>{formatDecimal(0.25)}</span>
-        <span>{formatDecimal(0.5)}</span>
-        <span>{formatDecimal(0.75)}</span>
-        <span>1</span>
+      <div aria-hidden="true" className="mt-1.5 flex justify-between font-mono text-[10px] text-muted-foreground tabular-nums">
+        {[0, 0.25, 0.5, 0.75, 1].map((tick) => (
+          <span key={tick}>{tick === 0 || tick === 1 ? tick : formatDecimal(tick)}</span>
+        ))}
       </div>
     </div>
   );
 }
 
-/** Diverging bars: SHAP contribution, right = raises risk, left = lowers risk. */
+/** Diverging bars of SHAP contributions (right = raises risk), revealed one after another. */
 export function FactorBars({ factors }: { factors: RiskFactor[] }) {
   const maxAbs = Math.max(0.5, ...factors.map((f) => Math.abs(f.kontribusi)));
   return (
-    <ol className="flex flex-col gap-3">
-      {factors.map((factor) => {
+    <ol className="flex flex-col gap-4">
+      {factors.map((factor, index) => {
         const positive = factor.kontribusi >= 0;
         const width = (Math.abs(factor.kontribusi) / maxAbs) * 50;
         return (
-          <li key={factor.fitur}>
+          <motion.li
+            key={factor.fitur}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2, delay: 0.08 + index * 0.08 }}
+          >
             <div className="flex items-baseline justify-between gap-3">
-              <p className="text-sm font-medium text-foreground">{factor.label}</p>
-              <p className={clsx("shrink-0 font-mono text-xs", positive ? "text-ember-ink" : "text-muted-foreground")}>
+              <p className="text-sm font-medium">{factor.label}</p>
+              <p className={cn("shrink-0 font-mono text-xs tabular-nums", positive ? "text-ember-ink" : "text-muted-foreground")}>
                 {formatSigned(factor.kontribusi)}
               </p>
             </div>
             <p className="text-xs text-muted-foreground">
               {FACTOR_LABELS[factor.fitur] ?? factor.fitur} · {positive ? "menaikkan risiko" : "menurunkan risiko"}
             </p>
-            <div aria-hidden="true" className="relative mt-1.5 h-2 rounded-full bg-muted">
-              <div className="absolute inset-y-[-3px] left-1/2 w-px bg-border" />
-              <div
-                className={clsx("absolute inset-y-0 rounded-full", positive ? "left-1/2 bg-ember" : "right-1/2 bg-primary")}
-                style={{ width: `${width}%` }}
+            <div aria-hidden="true" className="relative mt-2 h-1.5 rounded-full bg-muted">
+              <span className="absolute -inset-y-1 left-1/2 w-px bg-border" />
+              <motion.span
+                className={cn("absolute inset-y-0 rounded-full", positive ? "left-1/2 bg-ember" : "right-1/2 bg-foreground/60")}
+                initial={{ width: 0 }}
+                animate={{ width: `${width}%` }}
+                transition={{ duration: 0.3, delay: 0.12 + index * 0.08, ease: [0.2, 0, 0, 1] }}
               />
             </div>
-          </li>
+          </motion.li>
         );
       })}
     </ol>
   );
 }
 
-export function PredictionNote() {
+export function PredictionNote({ className }: { className?: string }) {
   return (
-    <p className="flex items-start gap-2 rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
-      <InfoIcon className="mt-px size-4 shrink-0" />
+    <p className={cn("flex items-start gap-2 rounded-xl border border-dashed px-3 py-2.5 text-xs text-muted-foreground", className)}>
+      <Info aria-hidden="true" className="mt-px size-3.5 shrink-0" />
       Prediksi model, bukan kepastian.
     </p>
   );
@@ -97,62 +117,58 @@ export function CellDetail({
   feature,
   regionName,
   weather,
-  onClose,
 }: {
   feature: RiskCellFeature;
   regionName: string;
   weather?: WeatherSnapshot;
-  onClose: () => void;
 }) {
   const p = feature.properties;
-  const levelLabel = getRiskLabel(p.level_risiko).toLowerCase();
-  return (
-    <div className="flex flex-col gap-4">
-      <DetailHeader eyebrow={`Kotak grid ${p.cell_id} · 5×5 km`} title={regionName} onClose={onClose} />
+  const level = p.level_risiko;
 
-      <div>
+  const tiles: InfoTile[] = [{ icon: Sprout, label: "Jenis lahan", value: p.is_gambut ? "Gambut" : "Tanah mineral" }];
+  if (weather) {
+    tiles.push(
+      { icon: Sun, label: "Hari tanpa hujan", value: `${formatInteger(weather.hari_tanpa_hujan)} hari`, mono: true },
+      { icon: Droplets, label: "Kelembapan", value: `${formatInteger(weather.kelembapan_persen)}%`, mono: true },
+      { icon: Thermometer, label: "Suhu", value: `${formatDecimal(weather.suhu_c, 1)} °C`, mono: true },
+      { icon: CloudRain, label: "Curah hujan", value: `${formatDecimal(weather.curah_hujan_mm, 1)} mm`, mono: true },
+      { icon: Wind, label: "Angin", value: `${formatDecimal(weather.kecepatan_angin_kmh, 1)} km/j`, mono: true },
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-7">
+      <section aria-label="Skor risiko">
         <p className="text-xs text-muted-foreground">Skor risiko untuk {formatDayShort(p.tanggal_target)}</p>
-        <div className="mt-1 flex items-center gap-3">
-          <span className="font-mono text-4xl font-semibold tracking-tight text-foreground">{formatDecimal(p.skor_risiko)}</span>
-          <RiskBadge level={p.level_risiko} size="lg" />
+        <div className="mt-1 mb-4 flex items-center gap-3">
+          <CountUp
+            value={p.skor_risiko}
+            format={(v) => formatDecimal(v)}
+            className="font-mono text-5xl font-semibold tracking-tighter tabular-nums"
+          />
+          <RiskBadge level={level} size="lg" />
         </div>
-        <div className="mt-3">
-          <ScoreBar score={p.skor_risiko} />
-        </div>
-      </div>
+        <ScoreGauge score={p.skor_risiko} level={level} />
+      </section>
 
       <section aria-labelledby="faktor-risiko">
-        <h3 id="faktor-risiko" className="mb-2 text-sm font-semibold text-foreground">
-          Kenapa risikonya {levelLabel}?
-        </h3>
-        <FactorBars factors={p.faktor} />
+        <SectionTitle id="faktor-risiko">Kenapa risikonya {getRiskLabel(level).toLowerCase()}?</SectionTitle>
+        <FactorBars key={`${p.cell_id}-${p.tanggal_target}`} factors={p.faktor} />
       </section>
 
       <section aria-labelledby="info-lahan">
-        <h3 id="info-lahan" className="text-sm font-semibold text-foreground">
-          Cuaca terkini &amp; lahan
-        </h3>
-        <DetailRows
-          rows={[
-            ["Jenis lahan", p.is_gambut ? "Gambut" : "Tanah mineral"],
-            ...(weather
-              ? ([
-                  ["Hari tanpa hujan", <span key="d" className="font-mono">{formatInteger(weather.hari_tanpa_hujan)} hari</span>],
-                  ["Kelembapan", <span key="h" className="font-mono">{formatInteger(weather.kelembapan_persen)}%</span>],
-                  ["Suhu", <span key="t" className="font-mono">{formatDecimal(weather.suhu_c, 1)} °C</span>],
-                  ["Curah hujan", <span key="r" className="font-mono">{formatDecimal(weather.curah_hujan_mm, 1)} mm</span>],
-                ] as [string, ReactNode][])
-              : []),
-            ["Diprediksi pada", formatDate(p.tanggal_prediksi)],
-          ]}
-        />
-        {weather ? (
-          <p className="mt-1 text-xs text-muted-foreground">Cuaca terkini {regionName}, {formatDayShort(weather.tanggal)}.</p>
-        ) : null}
+        <SectionTitle id="info-lahan">Cuaca terkini &amp; lahan</SectionTitle>
+        <InfoGrid items={tiles} />
+        <p className="mt-2 text-xs text-muted-foreground">
+          {weather ? `Cuaca terkini ${regionName}, ${formatDayShort(weather.tanggal)}. ` : ""}
+          Diprediksi pada {formatDate(p.tanggal_prediksi)}.
+        </p>
       </section>
 
-      <RegionLink slug={p.kabupaten} name={regionName} />
-      <PredictionNote />
+      <div className="flex flex-col gap-3">
+        <RegionLink slug={p.kabupaten} name={regionName} />
+        <PredictionNote />
+      </div>
     </div>
   );
 }

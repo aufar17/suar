@@ -1,68 +1,93 @@
+"use client";
+
+import { ChevronRight } from "lucide-react";
+import { motion } from "motion/react";
 import Link from "next/link";
-import { CardHeader } from "@/components/ui/legacy-card";
-import { Skeleton } from "@/components/ui/controls";
-import { ChevronRightIcon } from "@/components/ui/icons";
 import { RiskBadge } from "@/components/ui/risk-badge";
-import { formatDayShort, formatDecimal } from "@/lib/format";
+import { Skeleton } from "@/components/ui/skeleton";
+import { formatDecimal } from "@/lib/format";
 import { getRiskLevel } from "@/lib/risk";
-import type { RegionStat } from "@/types";
+import { cn } from "@/lib/utils";
+import type { RegionStat, RiskLevel } from "@/types";
+
+const BAR_CLASSES: Record<RiskLevel, string> = {
+  rendah: "bg-muted-foreground/50",
+  sedang: "bg-risk-sedang",
+  tinggi: "bg-risk-tinggi",
+  sangat_tinggi: "bg-risk-sangat-tinggi",
+};
 
 /** "5 kabupaten paling rawan" by mean risk score for the selected target date. */
 export function TopRegions({
   stats,
-  targetDate,
   error,
+  onRetry,
+  className,
 }: {
   stats: RegionStat[] | undefined;
-  targetDate: string;
   error?: string;
+  onRetry?: () => void;
+  className?: string;
 }) {
-  const top = (stats ?? []).slice(0, 5);
+  if (error) {
+    return (
+      <p role="alert" className={cn("text-sm text-muted-foreground", className)}>
+        Gagal memuat peringkat.{" "}
+        {onRetry ? (
+          <button type="button" onClick={onRetry} className="font-medium text-foreground underline underline-offset-2">
+            Coba lagi
+          </button>
+        ) : null}
+      </p>
+    );
+  }
+  if (!stats) {
+    return (
+      <div className={cn("flex flex-col gap-1", className)}>
+        {Array.from({ length: 5 }, (_, i) => (
+          <div key={i} className="flex h-11 items-center gap-3 px-2">
+            <Skeleton className="h-3 w-3" />
+            <div className="flex flex-1 flex-col gap-1.5">
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="h-1.5 w-full" />
+            </div>
+            <Skeleton className="h-4 w-14 rounded-full" />
+          </div>
+        ))}
+      </div>
+    );
+  }
   return (
-    <div className="flex flex-col gap-3">
-      <CardHeader
-        title="5 kabupaten paling rawan"
-        description={`Rata-rata skor risiko, ${formatDayShort(targetDate)}`}
-      />
-      {error ? (
-        <p role="alert" className="text-sm text-muted-foreground">
-          Gagal memuat peringkat. {error}
-        </p>
-      ) : !stats ? (
-        <div className="flex flex-col gap-2">
-          {Array.from({ length: 5 }, (_, i) => (
-            <Skeleton key={i} className="h-11" />
-          ))}
-        </div>
-      ) : (
-        <ol className="flex flex-col">
-          {top.map((region, index) => {
-            const level = getRiskLevel(region.rata_skor_risiko);
-            return (
-              <li key={region.slug}>
-                <Link
-                  href={`/wilayah/${region.slug}`}
-                  className="-mx-2 flex min-h-11 items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-muted"
-                >
-                  <span className="w-4 font-mono text-xs text-muted-foreground">{index + 1}</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-foreground">{region.nama}</span>
-                    <span className="mt-1 block h-1.5 rounded-full bg-muted">
-                      <span
-                        className="block h-full rounded-full bg-primary"
-                        style={{ width: `${region.rata_skor_risiko * 100}%` }}
-                      />
-                    </span>
-                  </span>
-                  <span className="font-mono text-sm text-foreground">{formatDecimal(region.rata_skor_risiko)}</span>
-                  <RiskBadge level={level} size="sm" />
-                  <ChevronRightIcon className="size-4 text-muted-foreground" />
-                </Link>
-              </li>
-            );
-          })}
-        </ol>
-      )}
-    </div>
+    <ol className={cn("flex flex-col", className)}>
+      {stats.slice(0, 5).map((region, index) => {
+        const level = getRiskLevel(region.rata_skor_risiko);
+        return (
+          <li key={region.slug}>
+            <Link
+              href={`/wilayah/${region.slug}`}
+              className="group -mx-1 flex min-h-11 items-center gap-3 rounded-lg px-2 py-1.5 transition-colors duration-150 hover:bg-muted/70"
+            >
+              <span className="w-3 font-mono text-xs text-muted-foreground tabular-nums">{index + 1}</span>
+              <span className="min-w-0 flex-1">
+                <span className="flex items-baseline justify-between gap-2">
+                  <span className="truncate text-sm font-medium">{region.nama}</span>
+                  <span className="font-mono text-xs tabular-nums">{formatDecimal(region.rata_skor_risiko)}</span>
+                </span>
+                <span aria-hidden="true" className="mt-1 block h-1.5 overflow-hidden rounded-full bg-muted">
+                  <motion.span
+                    className={cn("block h-full origin-left rounded-full", BAR_CLASSES[level])}
+                    initial={false}
+                    animate={{ width: `${Math.max(2, region.rata_skor_risiko * 100)}%` }}
+                    transition={{ duration: 0.3, ease: [0.2, 0, 0, 1] }}
+                  />
+                </span>
+              </span>
+              <RiskBadge level={level} size="sm" />
+              <ChevronRight aria-hidden="true" className="size-4 text-muted-foreground transition-transform duration-150 group-hover:translate-x-0.5" />
+            </Link>
+          </li>
+        );
+      })}
+    </ol>
   );
 }

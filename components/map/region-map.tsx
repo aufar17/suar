@@ -1,5 +1,6 @@
 "use client";
 
+import type L from "leaflet";
 import { useMemo } from "react";
 import { useResolvedTheme } from "@/components/ui/theme";
 import type { BBox, HotspotCollection, RegionBoundaryCollection, RiskCellCollection } from "@/types";
@@ -16,18 +17,19 @@ export interface RegionMapProps {
   risk?: RiskCellCollection;
   boundaries?: RegionBoundaryCollection;
   regionNames: Record<string, string>;
+  onReady?: (map: L.Map) => void;
 }
 
 /** Region page map: the region's risk grid and hotspots, with its outline emphasized. */
-export default function RegionMap({ slug, name, bbox, hotspots, risk, boundaries, regionNames }: RegionMapProps) {
+export default function RegionMap({ slug, name, bbox, hotspots, risk, boundaries, regionNames, onReady }: RegionMapProps) {
   const theme = useResolvedTheme();
   const regionRisk = useMemo(
     () => risk && { ...risk, features: risk.features.filter((f) => f.properties.kabupaten === slug) },
     [risk, slug],
   );
   return (
-    <MapView label={`Peta risiko dan hotspot ${name}`} bbox={bbox}>
-      {regionRisk ? <RiskLayer data={regionRisk} opacity={0.65} /> : null}
+    <MapView label={`Peta risiko dan hotspot ${name}`} bbox={bbox} theme={theme} onReady={onReady}>
+      {regionRisk ? <RiskLayer data={regionRisk} opacity={0.65} theme={theme} /> : null}
       {boundaries ? <BoundaryLayer data={boundaries} theme={theme} emphasize={slug} /> : null}
       {hotspots ? <HotspotLayer data={hotspots} regionNames={regionNames} theme={theme} /> : null}
     </MapView>

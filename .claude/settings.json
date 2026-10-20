@@ -1,0 +1,53 @@
+{
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Read",
+      "Edit",
+      "Write",
+      "Glob",
+      "Grep",
+      "Bash(pnpm:*)",
+      "Bash(npx:*)",
+      "Bash(node:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git branch)",
+      "Bash(git show:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(mkdir:*)",
+      "Bash(cp:*)",
+      "Bash(mv:*)",
+      "Bash(touch:*)",
+      "Bash(echo:*)",
+      "Bash(pwd)",
+      "Bash(wc:*)",
+      "WebFetch(domain:ui.shadcn.com)",
+      "WebFetch(domain:nextjs.org)",
+      "WebFetch(domain:tailwindcss.com)",
+      "WebFetch(domain:react-leaflet.js.org)",
+      "WebFetch(domain:leafletjs.com)",
+      "WebFetch(domain:motion.dev)"
+    ],
+    "deny": [
+      "Bash(git push:*)",
+      "Bash(git checkout:*)",
+      "Bash(git switch:*)",
+      "Bash(git merge:*)",
+      "Bash(git rebase:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git clean:*)",
+      "Bash(rm -rf:*)",
+      "Read(./.env)",
+      "Read(./.env.local)"
+    ]
+  }
+}

@@ -15,6 +15,29 @@ async function readError(response: Response): Promise<string> {
   }
 }
 
+const pending = new Map<string, Promise<unknown>>();
+
+/** Loads a URL into the response cache ahead of time (e.g. the next prediction days). */
+export function prefetchJson(url: string): Promise<unknown> {
+  if (responseCache.has(url)) return Promise.resolve(responseCache.get(url));
+  const inFlight = pending.get(url);
+  if (inFlight) return inFlight;
+  const request = fetch(url)
+    .then(async (response) => {
+      if (!response.ok) throw new Error(await readError(response));
+      const data: unknown = await response.json();
+      responseCache.set(url, data);
+      return data;
+    })
+    .finally(() => pending.delete(url));
+  pending.set(url, request);
+  return request;
+}
+
+export function isJsonCached(url: string): boolean {
+  return responseCache.has(url);
+}
+
 export interface JsonState<T> {
   /** Latest data. While a new URL loads, this still holds the previous result. */
   data: T | undefined;

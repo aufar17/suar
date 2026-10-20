@@ -1,111 +1,113 @@
 "use client";
 
-import { clsx } from "clsx";
-import { useId } from "react";
+import { Loader2, Pause, Play } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 import { PREDICTION_DAYS } from "@/components/map/use-map-filters";
-import { addDaysIso, formatDateLong, formatDayShort, formatPercent } from "@/lib/format";
+import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
+import { addDaysIso, formatDateLong, formatDayShort } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
-/** Slider for the prediction day (+1 … +7) with the resulting date. */
-export function PredictionDaySlider({
+/**
+ * Prediction timeline: play/pause plus a +1…+7 day slider with dates. The slider handles
+ * keyboard input (arrows, Home/End); the day labels are extra click targets for mice.
+ */
+export function PredictionTimeline({
   baseDate,
   value,
   onChange,
+  playing,
+  onPlayingChange,
+  loading,
+  className,
 }: {
   baseDate: string;
   value: number;
   onChange: (day: number) => void;
+  playing: boolean;
+  onPlayingChange: (playing: boolean) => void;
+  loading?: boolean;
+  className?: string;
 }) {
-  const id = useId();
   const target = addDaysIso(baseDate, value);
+  const pick = (day: number) => {
+    onPlayingChange(false);
+    onChange(day);
+  };
   return (
-    <div>
-      <div className="mb-1 flex items-baseline justify-between gap-2">
-        <label htmlFor={id} className="text-xs font-medium text-muted-foreground">
-          Prediksi untuk
-        </label>
-        <span className="text-sm font-medium text-foreground">
-          <span className="font-mono">+{value}</span> · {formatDayShort(target)}
-        </span>
-      </div>
-      <input
-        id={id}
-        type="range"
-        min={1}
-        max={7}
-        step={1}
-        value={value}
-        aria-valuetext={`Hari ke-${value}, ${formatDateLong(target)}`}
-        onChange={(event) => onChange(Number(event.target.value))}
-        className="h-11 w-full cursor-pointer accent-[var(--primary)]"
-      />
-      <div aria-hidden="true" className="flex justify-between px-0.5 font-mono text-[11px] text-muted-foreground">
-        {PREDICTION_DAYS.map((day) => (
-          <span key={day} className={clsx(day === value && "font-semibold text-foreground")}>
-            +{day}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
+    <section
+      aria-label="Linimasa prediksi risiko"
+      className={cn("glass-panel rounded-2xl px-3 pt-2.5 pb-1.5 sm:px-4", className)}
+    >
+      <div className="flex items-center gap-3">
+        <Button
+          variant="ember"
+          size="icon"
+          onClick={() => onPlayingChange(!playing)}
+          aria-label={playing ? "Jeda animasi prediksi" : "Putar animasi prediksi 7 hari"}
+          aria-pressed={playing}
+          className="size-10 shrink-0 rounded-full shadow-sm"
+        >
+          <AnimatePresence initial={false} mode="popLayout">
+            <motion.span
+              key={playing ? "pause" : "play"}
+              initial={{ scale: 0.6, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.6, opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="flex"
+            >
+              {playing ? <Pause className="size-4 fill-current" /> : <Play className="size-4 translate-x-px fill-current" />}
+            </motion.span>
+          </AnimatePresence>
+        </Button>
 
-/** Mobile: one chip per prediction day. */
-export function PredictionDayChips({
-  baseDate,
-  value,
-  onChange,
-}: {
-  baseDate: string;
-  value: number;
-  onChange: (day: number) => void;
-}) {
-  return (
-    <div role="radiogroup" aria-label="Prediksi untuk hari" className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4">
-      {PREDICTION_DAYS.map((day) => {
-        const target = addDaysIso(baseDate, day);
-        const active = day === value;
-        return (
-          <button
-            key={day}
-            type="button"
-            role="radio"
-            aria-checked={active}
-            aria-label={`Hari ke-${day}, ${formatDateLong(target)}`}
-            onClick={() => onChange(day)}
-            className={clsx(
-              "flex min-h-11 min-w-14 shrink-0 flex-col items-center justify-center rounded-lg border px-2 leading-tight",
-              active ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-foreground",
-            )}
-          >
-            <span className="font-mono text-xs font-semibold">+{day}</span>
-            <span className="text-[11px] opacity-80">{formatDayShort(target).replace(",", "")}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-export function OpacitySlider({ value, onChange }: { value: number; onChange: (value: number) => void }) {
-  const id = useId();
-  return (
-    <div>
-      <div className="mb-1 flex items-baseline justify-between">
-        <label htmlFor={id} className="text-xs font-medium text-muted-foreground">
-          Opasitas lapisan risiko
-        </label>
-        <span className="font-mono text-xs text-foreground">{formatPercent(value * 100)}</span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <p className="truncate text-xs text-muted-foreground">Prediksi risiko untuk</p>
+            {loading ? <Loader2 aria-label="Memuat prediksi" className="size-3.5 animate-spin text-muted-foreground" /> : null}
+          </div>
+          <p className="truncate text-sm font-semibold">
+            <span className="font-mono tabular-nums">+{value}</span> hari · {formatDayShort(target)}
+          </p>
+        </div>
       </div>
-      <input
-        id={id}
-        type="range"
-        min={0.2}
-        max={1}
-        step={0.1}
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-        className="h-11 w-full cursor-pointer accent-[var(--primary)]"
-      />
-    </div>
+
+      <div className="mt-2.5 px-[calc(100%/14-10px)]">
+        <Slider
+          min={1}
+          max={7}
+          step={1}
+          value={[value]}
+          onValueChange={([day]) => pick(day)}
+          aria-label="Hari prediksi"
+          aria-valuetext={`Hari ke-${value}, ${formatDateLong(target)}`}
+        />
+      </div>
+      <ol aria-hidden="true" className="mt-1 grid grid-cols-7">
+        {PREDICTION_DAYS.map((day) => {
+          const [weekday, date] = formatDayShort(addDaysIso(baseDate, day)).split(", ");
+          const active = day === value;
+          return (
+            <li key={day} className="flex justify-center">
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={() => pick(day)}
+                className={cn(
+                  "flex min-h-9 flex-col items-center justify-center rounded-md px-1 leading-tight transition-colors duration-150",
+                  active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <span className={cn("font-mono text-[11px] tabular-nums", active && "font-semibold")}>+{day}</span>
+                <span className="hidden text-[10px] sm:block">
+                  {weekday} {date.split(" ")[0]}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
   );
 }
