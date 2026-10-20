@@ -114,6 +114,8 @@ docs/                kontrak RPC Supabase
 
 ## Catatan
 
-- Peta dasar memakai tile OpenStreetMap publik. Untuk trafik tinggi, gunakan penyedia tile sendiri sesuai
-  [kebijakan penggunaan OSM](https://operations.osmfoundation.org/policies/tiles/).
+- Peta dasar memakai tile Esri Canvas (World Light/Dark Gray, mengikuti tema) dengan atribusi Esri dan OpenStreetMap.
+  Layanan ini ditujukan untuk penggunaan non-komersial/pengembangan; sebelum rilis produksi, cek syarat Esri (akun
+  ArcGIS Location Platform) atau ganti penyedia di `BASEMAPS` (`components/map/map-view.tsx`). CARTO Positron/Dark
+  Matter kini membutuhkan API key.
 - Hotspot bukan kebakaran terkonfirmasi, dan prediksi risiko adalah keluaran model, bukan kepastian.

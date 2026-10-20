@@ -391,7 +391,12 @@ export function MapDashboard({ status }: { status: DataStatus }) {
           <SlidersHorizontal />
           <span className="font-mono text-[11px] tabular-nums">{visibleLayers.length}</span>
         </Button>
-        <ul aria-label="Ringkasan singkat" className="no-scrollbar flex min-w-0 flex-1 gap-2 overflow-x-auto">
+        {/* Focusable so keyboard users can scroll the strip. */}
+        <ul
+          aria-label="Ringkasan singkat"
+          tabIndex={0}
+          className="no-scrollbar flex min-w-0 flex-1 gap-2 overflow-x-auto rounded-xl"
+        >
           {stats.slice(0, 3).map((stat) => (
             <li
               key={stat.label}

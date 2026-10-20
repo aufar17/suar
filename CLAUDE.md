@@ -10,15 +10,16 @@ Rencana kerja lengkap ada di `PLAN.md`. Kerjakan **satu fase per sesi**, kecuali
 
 ## Tech Stack
 
-- Next.js (App Router) + TypeScript (strict mode)
-- Tailwind CSS
-- react-leaflet + Leaflet, tile OpenStreetMap
-  - Next.js 15 / React 19 → react-leaflet v5
-  - Next.js 14 / React 18 → react-leaflet v4
-- Recharts untuk grafik
+- Next.js 16 (App Router, `cacheComponents`) + React 19 + TypeScript (strict mode)
+- Tailwind CSS v4 (konfigurasi berbasis CSS di `app/globals.css`, tanpa `tailwind.config`) + `tw-animate-css`
+- shadcn/ui gaya `new-york` di atas Radix (`radix-ui`), komponen di `components/ui/` (lihat `components.json`). Tambah komponen dengan `pnpm dlx shadcn@latest add <nama>`, lalu cek impor `cn` mengarah ke `@/lib/utils` dan sesuaikan ukuran/fokus seperti komponen lain.
+- react-leaflet v5 + Leaflet, basemap Esri Canvas World Light/Dark Gray + label (ikut tema)
+- Recharts lewat komponen Chart shadcn untuk grafik
+- motion (`motion/react`) untuk animasi, sonner untuk toast, next-themes untuk tema, lucide-react untuk ikon, cmdk (command palette), vaul (drawer)
+- Font Geist Sans & Geist Mono (`next/font/google`)
 - zod untuk validasi data dan query params
 - date-fns untuk tanggal (locale `id`)
-- @supabase/supabase-js (baru dipakai di Fase 10)
+- @supabase/supabase-js (sumber data `DATA_SOURCE=supabase`)
 - Package manager: pnpm
 
 ## Aturan Penting
@@ -32,6 +33,23 @@ Rencana kerja lengkap ada di `PLAN.md`. Kerjakan **satu fase per sesi**, kecuali
 - Warna level risiko jangan jadi satu-satunya penanda; selalu sertakan label teks.
 - Dukung light dan dark mode.
 - Format tanggal untuk pengguna: `19 Okt 2026`. Format tanggal di API dan data: ISO `YYYY-MM-DD`.
+
+## Desain
+
+- **Gaya:** minimalis, map-first, ruang kosong lega, terasa seperti dashboard SaaS modern. Halaman peta memenuhi area di bawah header; semua kontrol melayang di atas peta sebagai `glass-panel` (latar semi-transparan + `backdrop-blur`).
+- **Token:** semua warna adalah CSS variables di `app/globals.css` (`:root` dan `.dark`) dengan nama shadcn (`background`, `card`, `muted-foreground`, `primary`, `border`, `ring`, …). Jangan menulis hex langsung di komponen; pakai kelas token (`bg-card`, `text-muted-foreground`). Pengecualian: lapisan Leaflet yang butuh string warna (lihat `lib/risk.ts` dan file layer peta), yang harus disamakan dengan token.
+- **Warna:** netral skala zinc. Satu aksen **ember #E8590C**: `bg-ember`/`text-ember` untuk isian dan ikon, `text-ember-ink` untuk teks (lolos 4,5:1), `bg-ember-soft` untuk latar sorotan. `accent` shadcn tetap berarti latar hover netral. Aksi utama: `primary` (hampir hitam di terang, hampir putih di gelap).
+- **Skala risiko:** rendah (transparan di peta, chip netral), sedang #FACC15, tinggi #F97316, sangat tinggi #B91C1C (#DC2626 di mode gelap). Selalu dengan label teks (`RiskBadge`, `RiskSwatch`).
+- **Grafik:** seri tunggal = ember; perbandingan tahun = ember / teal / biru (dua tahun lalu bergaris putus). Palet baru wajib divalidasi (skill dataviz) untuk terang dan gelap. Setiap grafik punya tabel data (`ChartTable`).
+- **Tipografi:** Geist Sans untuk teks; Geist Mono (`font-mono`) untuk angka, skor, kode grid, dan sumbu grafik.
+- **Bentuk:** radius kartu/panel 12–16 px (`rounded-xl`/`rounded-2xl`), border tipis, bayangan halus (`shadow-xs`, `shadow-[var(--shadow-panel)]`).
+- **Tema:** next-themes (`attribute="class"`, default `system`, kunci `siapi-theme`). Komponen client yang butuh nama tema memakai `useResolvedTheme()` dari `components/ui/theme.tsx`. Mode gelap punya nilai token sendiri, bukan inversi.
+- **Animasi:** hanya untuk memperjelas perubahan, 150–300 ms (`motion`; tween peta di `components/map/animate.ts`). `MotionConfig reducedMotion="user"` dan aturan CSS `prefers-reduced-motion` mematikan gerakan; tween peta langsung ke akhir.
+- **Aksesibilitas:** kontras teks ≥ 4,5:1 (elemen UI ≥ 3:1), fokus keyboard selalu terlihat (`ring`), tombol ikon wajib `aria-label`, target sentuh ≥ 44 px di perangkat sentuh (`pointer-coarse:`). Cek dengan axe sebelum menyatakan perubahan UI selesai.
+- **Responsif:** uji di 360, 768, 1024, 1440 px tanpa scroll horizontal. Peta: tata letak desktop mulai `lg` (1024 px); di bawahnya kontrol pindah ke Drawer dan detail ke Drawer bawah.
+- **State:** loading = `Skeleton` berbentuk konten asli; kosong = `EmptyState`; error = `ErrorState` atau pil `MapStatus` dengan tombol "Coba lagi" (`components/ui/state.tsx`).
+- **Komponen berat** (peta, grafik Recharts) di-load dengan `next/dynamic` + skeleton seukuran (lihat `components/charts/lazy.tsx`).
+- `/dev/ui` menampilkan semua token dan komponen; hanya tersedia saat `pnpm dev` (404 di produksi).
 
 ## Perintah
 
@@ -51,13 +69,17 @@ app/
   statistik/page.tsx
   wilayah/[slug]/page.tsx
   tentang/page.tsx
+  dev/ui/                  # katalog token & komponen (hanya dev)
   api/                     # route handlers
 components/
-  map/  charts/  filters/  panels/  ui/
+  map/  charts/  filters/  panels/
+  ui/                      # shadcn/ui + komponen dasar proyek
+  providers.tsx            # tema, tooltip, toast, motion
 lib/
   data/                    # lapisan data (mock & supabase)
   risk.ts                  # util level & warna risiko
   format.ts                # util format tanggal & angka
+  utils.ts                 # cn()
 types/
 mock/                      # file JSON/GeoJSON data mock
 scripts/generate-mock.ts

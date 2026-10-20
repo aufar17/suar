@@ -33,19 +33,11 @@ export function DataStatusBadge({
         <button
           type="button"
           className={cn(
-            "inline-flex h-8 items-center gap-2 rounded-full border bg-card px-3 text-xs text-muted-foreground transition-colors hover:text-foreground",
+            "inline-flex h-8 items-center gap-2 rounded-full border bg-card px-3 text-xs pointer-coarse:h-11 text-muted-foreground transition-colors hover:text-foreground",
             className,
           )}
         >
-          <span className="relative flex size-2" aria-hidden="true">
-            <span
-              className={cn(
-                "absolute inline-flex size-full animate-ping rounded-full opacity-60 motion-reduce:hidden",
-                mock ? "bg-ember" : "bg-emerald-500",
-              )}
-            />
-            <span className={cn("relative inline-flex size-2 rounded-full", mock ? "bg-ember" : "bg-emerald-500")} />
-          </span>
+          <span aria-hidden="true" className={cn("size-2 shrink-0 rounded-full", mock ? "bg-ember" : "bg-emerald-500")} />
           <span className="font-medium text-foreground">{mock ? "Data contoh" : "Data pipeline"}</span>
           <span aria-hidden="true" className="hidden lg:inline">
             ·

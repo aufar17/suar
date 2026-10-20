@@ -19,7 +19,7 @@ function NavList({ pathname, className }: { pathname: string | null; className?:
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "relative z-10 flex h-9 items-center rounded-md px-3 text-sm font-medium transition-colors duration-150",
+                  "relative z-10 flex h-9 items-center rounded-md px-3 text-sm font-medium transition-colors duration-150 pointer-coarse:h-11",
                   active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
                 )}
               >

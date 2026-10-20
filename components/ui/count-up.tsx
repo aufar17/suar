@@ -10,7 +10,7 @@ import { useEffect, useRef } from "react";
 export function CountUp({
   value,
   format,
-  duration = 0.6,
+  duration = 0.3,
   className,
 }: {
   value: number;

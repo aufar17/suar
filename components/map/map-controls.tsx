@@ -74,7 +74,7 @@ export function MapControls({
       <ControlButton
         label={homeLabel}
         disabled={!map}
-        onClick={() => map?.flyToBounds(bboxToBounds(home), { ...padding, duration: 0.6, animate: !prefersReducedMotion() })}
+        onClick={() => map?.flyToBounds(bboxToBounds(home), { ...padding, duration: 0.3, animate: !prefersReducedMotion() })}
       >
         <Locate />
       </ControlButton>

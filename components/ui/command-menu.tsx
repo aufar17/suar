@@ -12,7 +12,6 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-  CommandSeparator,
 } from "@/components/ui/command";
 import { regionDisplayName } from "@/lib/labels";
 import type { Region } from "@/types";
@@ -100,7 +99,6 @@ export function CommandMenu({ regions }: { regions: Region[] }) {
               </CommandItem>
             ))}
           </CommandGroup>
-          <CommandSeparator />
           <CommandGroup heading="Kabupaten/kota">
             {kabupaten.map((region) => (
               <CommandItem
@@ -116,7 +114,6 @@ export function CommandMenu({ regions }: { regions: Region[] }) {
               </CommandItem>
             ))}
           </CommandGroup>
-          <CommandSeparator />
           <CommandGroup heading="Tema">
             <CommandItem value="tema terang light" onSelect={() => run(() => setTheme("light"))}>
               <Sun /> Terang
