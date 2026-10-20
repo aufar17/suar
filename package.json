@@ -11,6 +11,7 @@
     "mock:generate": "tsx scripts/generate-mock.ts"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.118.0",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "leaflet": "^1.9.4",

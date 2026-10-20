@@ -331,3 +331,51 @@ Pipeline belum tentu siap saat fase ini dikerjakan. Tujuannya menyiapkan supaya 
 ## Catatan Keputusan
 
 _(Diisi oleh Claude Code selama pengerjaan.)_
+
+**Umum**
+
+- **Next.js 16.4 + React 19.3 + react-leaflet 5**, sesuai `create-next-app` terbaru. Opsi bawaan `cacheComponents` dan `partialPrefetching` dipertahankan. Akibatnya: data dinamis di halaman dibaca di dalam `<Suspense>` atau lewat fungsi `"use cache"`, dan `usePathname`/`useSearchParams` juga dibungkus `Suspense`.
+- Script `typecheck` menjalankan `next typegen && tsc --noEmit`, karena tipe global `PageProps`/`LayoutProps` dibuat oleh Next.
+- Semua tombol dan target sentuh minimal 44 px (`min-h-11`), termasuk tombol zoom Leaflet (di-override via CSS).
+- Tata letak desktop 3 kolom dipakai mulai lebar ≥ 1280 px (`xl`). Di bawah itu (termasuk tablet 768 px) dipakai tata letak mobile (peta penuh, chip lapisan, bottom sheet), supaya peta tidak terlalu sempit.
+
+**Data mock (Fase 1)**
+
+- Tanggal data terakhir mock ditetapkan `2026-10-20` (bisa diubah dengan env `MOCK_END_DATE`) supaya hasilnya deterministik bersama seed tetap. Semua rentang waktu di UI ("24 jam", "3 hari", "besok") dihitung dari `tanggal_data`, bukan jam sistem.
+- Batas kabupaten placeholder dibuat dari garis besar provinsi yang dibagi dengan *power diagram* (Voronoi berbobot) dari titik pusat tiap kabupaten; kota (Pekanbaru, Dumai) diberi bobot negatif agar lebih kecil. Kotak grid diberi kabupaten dengan aturan jarak yang sama, sehingga konsisten dengan batasnya.
+- File besar (hotspot, grid, prediksi) disimpan dalam format ringkas (`types/mock.ts`) lalu diubah ke GeoJSON di `lib/data/mock.ts`. Total mock ±5 MB (GeoJSON penuh akan >15 MB).
+- `waktu_deteksi` memakai offset WIB (`+07:00`), dan tanggal hotspot = tanggal WIB.
+- Status cluster ditentukan dengan membandingkan jumlah hotspot di sekitar zona dengan hari sebelumnya, bukan acak.
+- `DataStatus` ditambah field `tanggal_data`, `prediksi_mulai`, `prediksi_sampai` supaya client tahu tanggal acuan.
+- `getRegionStats` menerima `start`/`end` opsional untuk jendela penghitungan hotspot (default 30 hari terakhir); `date` adalah tanggal target untuk rata-rata skor risiko.
+- Ditambahkan endpoint `GET /api/weather` (opsional `slug`) untuk kartu "rata-rata hari tanpa hujan" dan info cuaca di panel detail.
+- Default parameter API: tanpa `start`/`end` → tanggal data terakhir; tanpa `target_date` → besok. Jadi setiap endpoint tetap mengembalikan data saat dibuka langsung di browser.
+
+**Peta (Fase 2–6)**
+
+- Semua layer vektor memakai **satu renderer canvas** (`preferCanvas`) dan urutannya dijaga dengan `bringToFront()` (`components/map/layer-order.ts`). Pane terpisah membuat beberapa canvas bertumpuk, dan canvas teratas menghalangi klik ke kotak risiko di bawahnya.
+- Layer dibuat imperatif (`useMap` + `useEffect`), bukan ribuan komponen `<CircleMarker>`, agar tetap lancar dengan ±2.000 titik dan ±4.000 kotak. Perubahan opasitas hanya mengubah style, tidak membangun ulang layer.
+- Mengikuti panduan desain, hotspot berwarna #1C2321 bergaris putih (di mode gelap dibalik); *confidence* ditandai dengan kepekatan (rendah 50%, nominal 80%, tinggi 100%), bukan warna berbeda. Zona kebakaran semua bergaris putus-putus #1C2321; status ditampilkan sebagai teks di tooltip dan panel detail, bukan dengan warna.
+- Label nama wilayah muncul dari posisi kursor (point-in-polygon), sehingga garis batas tidak perlu interaktif dan tidak menghalangi klik ke kotak risiko.
+- Peta dasar di mode gelap memakai filter CSS pada tile OSM (tanpa penyedia tile kedua).
+- State filter disimpan di URL lewat `window.history.replaceState` (tersinkron dengan `useSearchParams`, tanpa request ke server). Parameter: `rentang`, `conf`, `lapisan`, `prediksi`. Opasitas risiko tidak disimpan di URL.
+- Seleksi kotak grid disimpan sebagai `cell_id`, sehingga panel detail mengikuti kotak yang sama saat hari prediksi diganti.
+- Info cuaca di panel detail kotak adalah cuaca **terkini** kabupaten (judulnya "Cuaca terkini & lahan"), bukan prakiraan untuk tanggal target.
+- Filter rentang waktu hanya pilihan cepat 24 jam / 3 hari / 7 hari (tanpa pemilih tanggal bebas), karena zona kebakaran hanya tersedia untuk hari terakhir.
+
+**Statistik & wilayah (Fase 7–8)**
+
+- Palet grafik perbandingan tahun divalidasi dengan skrip dataviz (lightness, chroma, CVD, kontras) untuk mode terang dan gelap: tahun berjalan = aksen, tahun sebelumnya = hijau-teal, dua tahun lalu = biru. Abu-abu tidak dipakai karena gagal cek chroma.
+- Grafik garis memakai interpolasi `linear` (kurva `monotone` membuat lonjakan semu pada data bulanan). Label langsung hanya untuk tahun berjalan; tahun lain lewat legenda, karena label ujung garis sempat bertumpuk.
+- Setiap grafik punya tabel data yang bisa dibuka ("Lihat tabel data") sebagai alternatif aksesibel.
+- Peringkat kabupaten dan grafik prediksi 7 hari dibuat dengan HTML/CSS (bukan Recharts) agar label teks level risiko, warna, dan tata letak mobile lebih mudah dikontrol.
+- Peringkat kabupaten di Statistik menghitung hotspot 12 bulan terakhir; skor risiko memakai prediksi untuk besok.
+- Ditambahkan halaman indeks `/wilayah` (tujuan menu "Wilayah").
+- `/wilayah/[slug]`: `dynamicParams` tidak didukung bersama Cache Components. Slug dicek **sebelum** `<Suspense>` lalu `notFound()` agar slug salah mendapat HTTP 404 sungguhan (bukan soft-404 dalam stream). Karena itu segmen ini memakai `export const instant = false` (validasi navigasi instan dimatikan); semua 12 slug valid tetap diprerender lewat `generateStaticParams`.
+
+**Penyempurnaan & Supabase (Fase 9–10)**
+
+- Lighthouse mobile (build produksi): Accessibility 100 di `/`, `/statistik`, `/wilayah/siak`, `/tentang`; Best Practices 96–100. Satu temuan tersisa: tile OSM beresolusi rendah pada layar DPR tinggi (bisa diatasi dengan `detectRetina`, tapi menambah beban tile OSM).
+- `supabase.ts` memakai RPC untuk semua data spasial dan statistik, serta tabel/view (`regions`, `weather_latest`, `data_status`) untuk data sederhana. Kontraknya di `docs/supabase-rpc.md`, termasuk syarat waktu dikirim dengan offset `+07:00`.
+- Caching: fungsi di `lib/data/index.ts` memakai `"use cache"` + `cacheLife("hours")`, dan route handler mengirim `Cache-Control: public, s-maxage=3600, stale-while-revalidate=86400`. Di client, respons API disimpan di memori selama tab terbuka.
+- Dengan `DATA_SOURCE=supabase`, `next build` memanggil Supabase saat prerender (header, halaman statis), jadi build butuh kredensial dan database yang sudah siap.
