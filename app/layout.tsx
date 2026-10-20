@@ -17,7 +17,10 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SiAPI – Pemantauan & Prediksi Karhutla Riau",
+  title: {
+    default: "SiAPI – Pemantauan & Prediksi Karhutla Riau",
+    template: "%s · SiAPI",
+  },
   description:
     "Dashboard pemantauan hotspot dan prediksi risiko kebakaran hutan dan lahan di Provinsi Riau.",
 };

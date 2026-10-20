@@ -60,7 +60,7 @@ export function StatCard({
       >
         {value}
       </div>
-      {hint ? <p className={clsx("text-xs text-fg-muted", !compact && "truncate")}>{hint}</p> : null}
+      {hint ? <p className={clsx("text-xs text-fg-muted", !compact && "line-clamp-2")}>{hint}</p> : null}
       {children}
     </Card>
   );

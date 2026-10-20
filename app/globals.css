@@ -37,6 +37,13 @@
   --map-cluster: #1c2321;
   --map-boundary: #1f3b36;
   --map-gambut: #7a6a3a;
+
+  /* Charts (validated with the dataviz palette checks). */
+  --chart-line: #1f3b36;
+  --chart-year-current: #c2521f;
+  --chart-year-1: #0e826b;
+  --chart-year-2: #7584c9;
+  --chart-grid: #e6e8e3;
 }
 
 [data-theme="dark"] {
@@ -70,6 +77,12 @@
   --map-cluster: #f3f4f0;
   --map-boundary: #8fc2b5;
   --map-gambut: #c9b67a;
+
+  --chart-line: #8fc2b5;
+  --chart-year-current: #e07040;
+  --chart-year-1: #239e83;
+  --chart-year-2: #7f8cd6;
+  --chart-grid: #2a322f;
 }
 
 @theme inline {
