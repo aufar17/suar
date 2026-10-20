@@ -31,6 +31,8 @@ export function MapView({ children, bbox = RIAU_BBOX, label }: MapViewProps) {
       <MapContainer
         bounds={bboxToBounds(bbox)}
         boundsOptions={{ padding: [8, 8] }}
+        zoomSnap={0.25}
+        zoomDelta={0.5}
         minZoom={6}
         maxZoom={15}
         preferCanvas

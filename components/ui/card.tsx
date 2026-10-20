@@ -36,18 +36,31 @@ export function StatCard({
   hint,
   className,
   children,
+  mono = true,
+  compact = false,
 }: {
   label: string;
   value: ReactNode;
   hint?: ReactNode;
   className?: string;
   children?: ReactNode;
+  /** Numbers use the mono face; names do not. */
+  mono?: boolean;
+  compact?: boolean;
 }) {
   return (
-    <Card className={clsx("flex min-w-0 flex-col gap-1 p-4", className)}>
+    <Card className={clsx("flex min-w-0 flex-col gap-1", compact ? "p-3" : "p-4", className)}>
       <p className="text-xs font-medium text-fg-muted">{label}</p>
-      <div className="truncate font-mono text-2xl font-semibold tracking-tight text-fg">{value}</div>
-      {hint ? <p className="truncate text-xs text-fg-muted">{hint}</p> : null}
+      <div
+        className={clsx(
+          "font-semibold tracking-tight text-fg",
+          mono && "font-mono",
+          compact ? "text-lg leading-snug break-words" : "truncate text-2xl",
+        )}
+      >
+        {value}
+      </div>
+      {hint ? <p className={clsx("text-xs text-fg-muted", !compact && "truncate")}>{hint}</p> : null}
       {children}
     </Card>
   );
