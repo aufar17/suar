@@ -3,6 +3,7 @@
 import { clsx } from "clsx";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Suspense } from "react";
 
 const NAV_ITEMS = [
   { href: "/", label: "Peta" },
@@ -11,13 +12,18 @@ const NAV_ITEMS = [
   { href: "/tentang", label: "Tentang" },
 ] as const;
 
-export function NavLinks({ className, variant }: { className?: string; variant: "desktop" | "mobile" }) {
-  const pathname = usePathname();
+interface NavLinksProps {
+  className?: string;
+  variant: "desktop" | "mobile";
+}
+
+function NavList({ className, variant, pathname }: NavLinksProps & { pathname: string | null }) {
   return (
     <nav aria-label={variant === "desktop" ? "Navigasi utama" : "Navigasi utama (seluler)"} className={className}>
       <ul className={clsx("flex", variant === "desktop" ? "gap-1" : "w-full")}>
         {NAV_ITEMS.map((item) => {
-          const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+          const active =
+            pathname !== null && (item.href === "/" ? pathname === "/" : pathname.startsWith(item.href));
           return (
             <li key={item.href} className={clsx(variant === "mobile" && "flex-1")}>
               <Link
@@ -41,5 +47,22 @@ export function NavLinks({ className, variant }: { className?: string; variant: 
         })}
       </ul>
     </nav>
+  );
+}
+
+function ActiveNavList(props: NavLinksProps) {
+  const pathname = usePathname();
+  return <NavList {...props} pathname={pathname} />;
+}
+
+/**
+ * The pathname is URL data, so it is read inside Suspense; the fallback renders the
+ * same links without an active state and keeps the layout prerendered.
+ */
+export function NavLinks(props: NavLinksProps) {
+  return (
+    <Suspense fallback={<NavList {...props} pathname={null} />}>
+      <ActiveNavList {...props} />
+    </Suspense>
   );
 }

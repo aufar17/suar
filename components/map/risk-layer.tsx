@@ -24,7 +24,8 @@ export function RiskLayer({
 }: {
   data: RiskCellCollection;
   opacity: number;
-  onSelect: (feature: RiskCellFeature) => void;
+  /** Omit to draw a read-only grid. */
+  onSelect?: (feature: RiskCellFeature) => void;
 }) {
   const map = useMap();
   const polygonsRef = useRef<Map<L.Polygon, RiskLevel>>(new Map());
@@ -35,13 +36,18 @@ export function RiskLayer({
     opacityRef.current = opacity;
   });
 
+  const interactive = onSelect !== undefined;
+
   useEffect(() => {
     const group = L.featureGroup();
     const polygons = new Map<L.Polygon, RiskLevel>();
     for (const feature of data.features) {
       const ring = feature.geometry.coordinates[0].map(([lon, lat]) => L.latLng(lat, lon));
-      const polygon = L.polygon(ring, cellStyle(feature.properties.level_risiko, opacityRef.current));
-      polygon.on("click", () => onSelectRef.current(feature));
+      const polygon = L.polygon(ring, {
+        ...cellStyle(feature.properties.level_risiko, opacityRef.current),
+        interactive,
+      });
+      if (interactive) polygon.on("click", () => onSelectRef.current?.(feature));
       polygon.addTo(group);
       polygons.set(polygon, feature.properties.level_risiko);
     }
@@ -50,7 +56,7 @@ export function RiskLayer({
     return () => {
       removeOrderedLayer(map, "risiko", group);
     };
-  }, [map, data]);
+  }, [map, data, interactive]);
 
   // Opacity changes only restyle; rebuilding thousands of polygons is not needed.
   useEffect(() => {
