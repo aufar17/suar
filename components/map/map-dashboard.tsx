@@ -30,7 +30,7 @@ import type {
   RegionWeather,
   RiskCellCollection,
 } from "@/types";
-import { HotspotGlyph, RiskGlyph, ZoneGlyph } from "./legend-icons";
+import { BoundaryGlyph, HotspotGlyph, PeatGlyph, RiskGlyph, ZoneGlyph } from "./legend-icons";
 import { MapLegend } from "./map-legend";
 import { MapSkeleton } from "./map-skeleton";
 import { MapStatus, type MapStatusItem } from "./map-status";
@@ -46,6 +46,8 @@ const LAYERS: LayerOption[] = [
   { key: "risiko", label: "Prediksi risiko", description: "Grid 5 km, skor 0–1", icon: <RiskGlyph /> },
   { key: "hotspot", label: "Hotspot", description: "Titik panas satelit", icon: <HotspotGlyph size={10} /> },
   { key: "zona", label: "Zona kebakaran", description: "Kelompok hotspot hari terakhir", icon: <ZoneGlyph /> },
+  { key: "batas", label: "Batas wilayah", description: "Kabupaten/kota, nama saat disorot", icon: <BoundaryGlyph /> },
+  { key: "gambut", label: "Lahan gambut", description: "Sebaran gambut per kotak grid", icon: <PeatGlyph /> },
 ];
 
 function countBy<T>(items: T[], key: (item: T) => string): Map<string, number> {
@@ -217,6 +219,7 @@ export function MapDashboard({ status }: { status: DataStatus }) {
             hotspots={hotspots.data}
             clusters={clusters.data}
             risk={risk.data}
+            boundaries={regions.data}
             riskOpacity={riskOpacity}
             regionNames={regionNames}
             selected={selected}

@@ -1,10 +1,19 @@
 "use client";
 
 import { useTheme } from "@/components/ui/theme";
-import type { ClusterCollection, ClusterFeature, HotspotCollection, RiskCellCollection, RiskCellFeature } from "@/types";
+import type {
+  ClusterCollection,
+  ClusterFeature,
+  HotspotCollection,
+  RegionBoundaryCollection,
+  RiskCellCollection,
+  RiskCellFeature,
+} from "@/types";
+import { BoundaryLayer } from "./boundary-layer";
 import { ClusterLayer } from "./cluster-layer";
 import { HotspotLayer } from "./hotspot-layer";
 import { MapView } from "./map-view";
+import { PeatLayer } from "./peat-layer";
 import { RiskLayer } from "./risk-layer";
 import { selectionRing, type SelectedFeature } from "./selection";
 import { SelectionLayer } from "./selection-layer";
@@ -16,6 +25,7 @@ export interface DashboardMapProps {
   hotspots?: HotspotCollection;
   clusters?: ClusterCollection;
   risk?: RiskCellCollection;
+  boundaries?: RegionBoundaryCollection;
   riskOpacity: number;
   regionNames: Record<string, string>;
   selected: SelectedFeature | null;
@@ -30,6 +40,7 @@ export default function DashboardMap({
   hotspots,
   clusters,
   risk,
+  boundaries,
   riskOpacity,
   regionNames,
   selected,
@@ -39,7 +50,9 @@ export default function DashboardMap({
   const theme = useTheme();
   return (
     <MapView label={label}>
+      {layers.includes("gambut") && risk ? <PeatLayer cells={risk} theme={theme} /> : null}
       {layers.includes("risiko") && risk ? <RiskLayer data={risk} opacity={riskOpacity} onSelect={onSelectCell} /> : null}
+      {layers.includes("batas") && boundaries ? <BoundaryLayer data={boundaries} theme={theme} /> : null}
       {layers.includes("zona") && clusters ? (
         <ClusterLayer data={clusters} theme={theme} onSelect={onSelectCluster} />
       ) : null}
