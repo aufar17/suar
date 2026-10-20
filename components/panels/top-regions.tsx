@@ -1,10 +1,11 @@
 "use client";
 
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, MapPinOff } from "lucide-react";
 import { motion } from "motion/react";
 import Link from "next/link";
 import { RiskBadge } from "@/components/ui/risk-badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/state";
 import { formatDecimal } from "@/lib/format";
 import { getRiskLevel } from "@/lib/risk";
 import { cn } from "@/lib/utils";
@@ -55,6 +56,16 @@ export function TopRegions({
           </div>
         ))}
       </div>
+    );
+  }
+  if (stats.length === 0) {
+    return (
+      <EmptyState
+        icon={MapPinOff}
+        title="Belum ada prediksi"
+        description="Skor risiko untuk tanggal ini belum tersedia."
+        className={cn("py-6", className)}
+      />
     );
   }
   return (

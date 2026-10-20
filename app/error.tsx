@@ -1,8 +1,10 @@
 "use client";
 
+import { Map as MapIcon, RotateCw } from "lucide-react";
 import Link from "next/link";
 import { useEffect } from "react";
-import { AlertIcon } from "@/components/ui/icons";
+import { Button } from "@/components/ui/button";
+import { ErrorState } from "@/components/ui/state";
 
 export default function ErrorPage({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
@@ -10,28 +12,25 @@ export default function ErrorPage({ error, reset }: { error: Error & { digest?: 
   }, [error]);
 
   return (
-    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center gap-4 px-4 py-16 text-center">
-      <AlertIcon className="size-10 text-ember-ink" />
-      <h1 className="text-2xl font-semibold text-foreground">Terjadi kesalahan</h1>
-      <p className="text-muted-foreground">
-        Data tidak dapat dimuat saat ini. Coba lagi beberapa saat lagi.
-        {error.digest ? <span className="mt-1 block font-mono text-xs">Kode: {error.digest}</span> : null}
-      </p>
-      <div className="flex flex-wrap justify-center gap-3">
-        <button
-          type="button"
-          onClick={reset}
-          className="inline-flex min-h-11 items-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-90"
-        >
-          Coba lagi
-        </button>
-        <Link
-          href="/"
-          className="inline-flex min-h-11 items-center rounded-lg border border-border px-4 text-sm font-medium text-foreground hover:bg-muted"
-        >
-          Kembali ke peta
-        </Link>
-      </div>
+    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center px-4 py-16">
+      <h1 className="sr-only">Terjadi kesalahan</h1>
+      <ErrorState
+        title="Halaman ini gagal dimuat"
+        description="Data tidak dapat diambil saat ini. Coba lagi beberapa saat lagi, atau kembali ke peta."
+        detail={error.digest ? `Kode: ${error.digest}` : undefined}
+        retry={
+          <div className="mt-2 flex flex-wrap justify-center gap-2">
+            <Button onClick={reset}>
+              <RotateCw /> Coba lagi
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href="/">
+                <MapIcon /> Kembali ke peta
+              </Link>
+            </Button>
+          </div>
+        }
+      />
     </main>
   );
 }

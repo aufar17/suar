@@ -1,4 +1,4 @@
-import { CalendarClock, CloudRain, Droplets, Flame, Gauge, Sprout, Sun, Thermometer, Wind } from "lucide-react";
+import { CalendarClock, CloudRain, Droplets, Flame, FlameKindling, Gauge, Sprout, Sun, Thermometer, Wind } from "lucide-react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
@@ -12,6 +12,7 @@ import { StatTile } from "@/components/panels/stat-tile";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { RiskBadge } from "@/components/ui/risk-badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/state";
 import {
   getDataStatus,
   getHotspots,
@@ -242,9 +243,21 @@ async function RegionContent({ slug }: { slug: string }) {
           <CardTitle
             id="tren"
             title="Hotspot per bulan"
-            description={`${formatMonth(trend[0].bulan)} – ${formatMonth(trend[trend.length - 1].bulan)} · bulan terakhir disorot`}
+            description={
+              trend.length
+                ? `${formatMonth(trend[0].bulan)} – ${formatMonth(trend[trend.length - 1].bulan)} · bulan terakhir disorot`
+                : undefined
+            }
           />
-          <MonthlyBarChart data={trend} label={`Grafik batang jumlah hotspot per bulan di ${name}, 24 bulan terakhir.`} />
+          {trend.some((d) => d.jumlah_hotspot > 0) ? (
+            <MonthlyBarChart data={trend} label={`Grafik batang jumlah hotspot per bulan di ${name}, 24 bulan terakhir.`} />
+          ) : (
+            <EmptyState
+              icon={FlameKindling}
+              title="Belum ada hotspot tercatat"
+              description={`Tidak ada titik panas di ${name} selama 24 bulan terakhir.`}
+            />
+          )}
         </Card>
       </div>
     </>

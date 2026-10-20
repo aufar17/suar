@@ -1,4 +1,4 @@
-import { CalendarRange, Flame, Gauge, TrendingDown, TrendingUp, Trophy } from "lucide-react";
+import { CalendarRange, Flame, FlameKindling, Gauge, TrendingDown, TrendingUp, Trophy } from "lucide-react";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { ChartSkeleton } from "@/components/charts/lazy";
@@ -11,6 +11,7 @@ import { StatTile } from "@/components/panels/stat-tile";
 import { DownloadCsvButton } from "@/components/ui/download-button";
 import { RiskBadge } from "@/components/ui/risk-badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/state";
 import { getDataStatus, getMonthlyTrend, getRegions, getRegionStats, getRiskCells } from "@/lib/data";
 import { addDaysIso, formatDate, formatDayShort, formatDecimal, formatInteger, formatMonth } from "@/lib/format";
 import { getRiskLevel } from "@/lib/risk";
@@ -156,7 +157,15 @@ async function StatsContent({ searchParams }: { searchParams: PageProps<"/statis
       </div>
 
       <section className="rounded-2xl border bg-card p-4 shadow-xs sm:p-6">
-        <TrendTabs trend={trend} currentYear={currentYear} scopeName={scopeName} periodLabel={periodLabel} />
+        {total > 0 ? (
+          <TrendTabs trend={trend} currentYear={currentYear} scopeName={scopeName} periodLabel={periodLabel} />
+        ) : (
+          <EmptyState
+            icon={FlameKindling}
+            title={`Belum ada hotspot tercatat di ${scopeName}`}
+            description={`Tidak ada titik panas pada ${periodLabel}. Pilih wilayah lain atau lihat seluruh provinsi.`}
+          />
+        )}
       </section>
 
       <section aria-labelledby="peringkat" className="rounded-2xl border bg-card p-4 shadow-xs sm:p-6">

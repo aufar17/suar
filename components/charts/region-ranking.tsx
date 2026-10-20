@@ -1,12 +1,13 @@
 "use client";
 
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, MapPinOff } from "lucide-react";
 import { motion } from "motion/react";
 import Link from "next/link";
 import { useState } from "react";
 import { DownloadCsvButton } from "@/components/ui/download-button";
 import { RiskBadge } from "@/components/ui/risk-badge";
 import { Segmented } from "@/components/ui/segmented";
+import { EmptyState } from "@/components/ui/state";
 import { formatDecimal, formatInteger } from "@/lib/format";
 import { getRiskLevel } from "@/lib/risk";
 import { cn } from "@/lib/utils";
@@ -38,6 +39,9 @@ export function RegionRanking({
     sort === "hotspot" ? b.jumlah_hotspot - a.jumlah_hotspot : b.rata_skor_risiko - a.rata_skor_risiko,
   );
   const maxHotspot = Math.max(1, ...stats.map((s) => s.jumlah_hotspot));
+  if (stats.length === 0) {
+    return <EmptyState icon={MapPinOff} title="Belum ada data peringkat" description="Statistik wilayah belum tersedia untuk periode ini." />;
+  }
 
   return (
     <div className="flex flex-col gap-4">
