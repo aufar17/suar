@@ -5,7 +5,7 @@ import { RegionRanking } from "@/components/charts/region-ranking";
 import { YearComparisonChart } from "@/components/charts/year-comparison-chart";
 import { RegionSelect } from "@/components/filters/region-select";
 import { SummaryCards, type SummaryItem } from "@/components/panels/summary-cards";
-import { Card, CardHeader } from "@/components/ui/card";
+import { Card, CardHeader } from "@/components/ui/legacy-card";
 import { Skeleton } from "@/components/ui/controls";
 import { DownloadCsvButton } from "@/components/ui/download-button";
 import { getDataStatus, getMonthlyTrend, getRegions, getRegionStats, getRiskCells } from "@/lib/data";
@@ -100,8 +100,8 @@ async function StatsContent({ searchParams }: { searchParams: PageProps<"/statis
     <>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-fg">Statistik hotspot</h1>
-          <p className="mt-1 text-sm text-fg-muted">
+          <h1 className="text-2xl font-semibold text-foreground">Statistik hotspot</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             {scopeName} · data sampai {formatDate(status.tanggal_data)}
           </p>
         </div>

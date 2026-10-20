@@ -11,14 +11,14 @@ export function DetailHeader({ eyebrow, title, onClose }: { eyebrow: string; tit
   return (
     <div className="flex items-start gap-3">
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-medium text-fg-muted">{eyebrow}</p>
-        <h2 className="text-base font-semibold text-fg">{title}</h2>
+        <p className="text-xs font-medium text-muted-foreground">{eyebrow}</p>
+        <h2 className="text-base font-semibold text-foreground">{title}</h2>
       </div>
       <button
         type="button"
         onClick={onClose}
         aria-label="Tutup detail"
-        className="-mt-1 -mr-2 flex size-11 shrink-0 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-2 hover:text-fg"
+        className="-mt-1 -mr-2 flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
       >
         <CloseIcon />
       </button>
@@ -28,11 +28,11 @@ export function DetailHeader({ eyebrow, title, onClose }: { eyebrow: string; tit
 
 export function DetailRows({ rows }: { rows: [string, ReactNode][] }) {
   return (
-    <dl className="flex flex-col divide-y divide-line text-sm">
+    <dl className="flex flex-col divide-y divide-border text-sm">
       {rows.map(([label, value]) => (
         <div key={label} className="flex items-baseline justify-between gap-4 py-2">
-          <dt className="text-fg-muted">{label}</dt>
-          <dd className="text-right font-medium text-fg">{value}</dd>
+          <dt className="text-muted-foreground">{label}</dt>
+          <dd className="text-right font-medium text-foreground">{value}</dd>
         </div>
       ))}
     </dl>
@@ -43,7 +43,7 @@ export function RegionLink({ slug, name }: { slug: string; name: string }) {
   return (
     <Link
       href={`/wilayah/${slug}`}
-      className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-fg hover:opacity-90"
+      className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-90"
     >
       Lihat halaman {name}
       <ArrowRightIcon className="size-4" />
@@ -52,10 +52,10 @@ export function RegionLink({ slug, name }: { slug: string; name: string }) {
 }
 
 const STATUS_STYLES: Record<ClusterStatus, string> = {
-  baru: "bg-accent text-accent-fg",
-  meluas: "bg-primary text-primary-fg",
-  stabil: "bg-surface-2 text-fg ring-1 ring-line ring-inset",
-  menyusut: "bg-surface-2 text-fg-muted ring-1 ring-line ring-inset",
+  baru: "bg-ember text-ember-foreground",
+  meluas: "bg-primary text-primary-foreground",
+  stabil: "bg-muted text-foreground ring-1 ring-border ring-inset",
+  menyusut: "bg-muted text-muted-foreground ring-1 ring-border ring-inset",
 };
 
 export function ClusterDetail({
@@ -76,7 +76,7 @@ export function ClusterDetail({
         <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_STYLES[p.status]}`}>
           {CLUSTER_STATUS_LABELS[p.status]}
         </span>
-        <p className="text-xs text-fg-muted">{CLUSTER_STATUS_DESCRIPTIONS[p.status]}</p>
+        <p className="text-xs text-muted-foreground">{CLUSTER_STATUS_DESCRIPTIONS[p.status]}</p>
       </div>
       <DetailRows
         rows={[

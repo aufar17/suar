@@ -1,7 +1,8 @@
-import { clsx } from "clsx";
 import { getRiskLabel, RISK_BADGE_CLASSES } from "@/lib/risk";
+import { cn } from "@/lib/utils";
 import type { RiskLevel } from "@/types";
 
+/** Risk level chip. Color is never the only cue: the level is always written out. */
 export function RiskBadge({
   level,
   size = "md",
@@ -15,13 +16,13 @@ export function RiskBadge({
 }) {
   return (
     <span
-      className={clsx(
+      className={cn(
         "inline-flex items-center gap-1.5 rounded-full font-medium whitespace-nowrap",
-        level === "rendah" && "ring-1 ring-line ring-inset",
+        level === "rendah" && "ring-1 ring-border ring-inset",
         RISK_BADGE_CLASSES[level],
-        size === "sm" && "px-2 py-0.5 text-xs",
-        size === "md" && "px-2.5 py-1 text-xs",
-        size === "lg" && "px-3.5 py-1.5 text-sm",
+        size === "sm" && "px-2 py-0.5 text-[11px]",
+        size === "md" && "px-2.5 py-0.5 text-xs",
+        size === "lg" && "px-3 py-1 text-sm",
         className,
       )}
     >
@@ -36,9 +37,9 @@ export function RiskSwatch({ level, className }: { level: RiskLevel; className?:
   return (
     <span
       aria-hidden="true"
-      className={clsx(
-        "inline-block size-3.5 shrink-0 rounded-[3px] border",
-        level === "rendah" ? "border-fg-muted bg-transparent" : "border-transparent",
+      className={cn(
+        "inline-block size-3.5 shrink-0 rounded-[4px] border",
+        level === "rendah" ? "border-muted-foreground/70 bg-transparent" : "border-transparent",
         level === "sedang" && "bg-risk-sedang",
         level === "tinggi" && "bg-risk-tinggi",
         level === "sangat_tinggi" && "bg-risk-sangat-tinggi",

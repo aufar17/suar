@@ -379,3 +379,13 @@ _(Diisi oleh Claude Code selama pengerjaan.)_
 - `supabase.ts` memakai RPC untuk semua data spasial dan statistik, serta tabel/view (`regions`, `weather_latest`, `data_status`) untuk data sederhana. Kontraknya di `docs/supabase-rpc.md`, termasuk syarat waktu dikirim dengan offset `+07:00`.
 - Caching: fungsi di `lib/data/index.ts` memakai `"use cache"` + `cacheLife("hours")`, dan route handler mengirim `Cache-Control: public, s-maxage=3600, stale-while-revalidate=86400`. Di client, respons API disimpan di memori selama tab terbuka.
 - Dengan `DATA_SOURCE=supabase`, `next build` memanggil Supabase saat prerender (header, halaman statis), jadi build butuh kredensial dan database yang sudah siap.
+
+**Redesign (R1–R7, branch `refactor-design`)**
+
+- *R1 – Fondasi.* shadcn/ui gaya `new-york` (Radix lewat paket `radix-ui`), dipasang dengan `components.json` manual karena proyek memakai loader `@tailwindcss/turbopack`, bukan PostCSS. Komponen hasil CLI sedikit diubah: cincin fokus memakai warna `ring` penuh (bukan 50%), tombol 40 px dan minimal 44 px di perangkat sentuh (`pointer-coarse:`), varian tombol `ember`, switch lebih besar dengan track "off" `--control-off` (kontras ≥ 3:1), thumb slider dengan area sentuh diperluas, teks bawaan ("Close", judul command palette) diterjemahkan, dan `DialogTitle` command palette dipindah ke dalam `DialogContent` (peringatan aksesibilitas Radix).
+- Tema memakai **next-themes** (`attribute="class"`, default `system`) dengan kunci penyimpanan lama `siapi-theme`, sehingga pilihan tema pengguna sebelumnya tetap terbaca. Skrip tema buatan sendiri dihapus.
+- Token warna ditulis sebagai CSS variables (hex, bukan oklch, supaya mudah dicek kontrasnya) di `app/globals.css`, dengan nama shadcn (`background`, `muted-foreground`, …) ditambah `ember`, `ember-ink` (teks aksen yang lolos 4,5:1), `glass`, `risk-*`, `map-*`, `chart-*`. Kontras dicek dengan skrip: teks muted 6,0–7,8:1, `ember-ink` ≥ 4,7:1, teks di atas badge risiko ≥ 4,8:1.
+- **Sangat tinggi di mode gelap memakai #DC2626**, bukan #B91C1C: #B91C1C hanya 3,07:1 terhadap latar gelap sehingga sulit dibedakan dari basemap gelap; #DC2626 4,12:1 dan teks putih di atasnya tetap 4,83:1. `getRiskColor(level, theme)` di `lib/risk.ts` mengikuti token ini.
+- `Aksen` shadcn (`--accent`) tetap berarti latar hover netral; warna aksen merek bernama `ember` agar tidak bentrok.
+- Font Geist Sans dan Geist Mono lewat `next/font/google`.
+- Halaman `/dev/ui` (noindex, tidak ada di navigasi) menampilkan token dan komponen.

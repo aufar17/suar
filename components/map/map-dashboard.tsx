@@ -17,7 +17,7 @@ import { ClusterDetail } from "@/components/panels/detail-panel";
 import { CellDetail } from "@/components/panels/risk-detail";
 import { SummaryCards, type SummaryItem } from "@/components/panels/summary-cards";
 import { TopRegions } from "@/components/panels/top-regions";
-import { Card } from "@/components/ui/card";
+import { Card } from "@/components/ui/legacy-card";
 import { addDaysIso, formatDayShort, formatDecimal, formatInteger } from "@/lib/format";
 import { getRiskLabel, getRiskLevel } from "@/lib/risk";
 import { useJson } from "@/lib/use-json";
@@ -210,7 +210,7 @@ export function MapDashboard({ status }: { status: DataStatus }) {
         </aside>
 
         <div
-          className="map-frame relative isolate h-full overflow-hidden xl:rounded-card xl:border xl:border-line"
+          className="map-frame relative isolate h-full overflow-hidden xl:rounded-xl xl:border xl:border-border"
           style={{ ["--map-top-inset" as string]: "60px", ["--map-bottom-inset" as string]: "124px" }}
         >
           <DashboardMap
@@ -235,8 +235,8 @@ export function MapDashboard({ status }: { status: DataStatus }) {
           />
 
           {filters.lapisan.includes("risiko") ? (
-            <p className="pointer-events-none absolute top-16 left-3 z-[800] rounded-lg border border-line bg-surface/95 px-3 py-2 text-xs text-fg shadow-sm xl:top-3">
-              <span className="block text-fg-muted">Prediksi risiko</span>
+            <p className="pointer-events-none absolute top-16 left-3 z-[800] rounded-lg border border-border bg-card/95 px-3 py-2 text-xs text-foreground shadow-sm xl:top-3">
+              <span className="block text-muted-foreground">Prediksi risiko</span>
               <span className="font-medium">
                 <span className="font-mono">+{filters.prediksi}</span> hari · {formatDayShort(targetDate)}
               </span>
@@ -258,7 +258,7 @@ export function MapDashboard({ status }: { status: DataStatus }) {
         <aside aria-label="Detail dan peringkat" className="hidden min-h-0 flex-col gap-4 overflow-y-auto xl:flex">
           <Card className="p-4">
             {detail ?? (
-              <p className="text-sm text-fg-muted">
+              <p className="text-sm text-muted-foreground">
                 Klik kotak grid atau zona kebakaran di peta untuk melihat detail dan faktor risikonya.
               </p>
             )}
@@ -280,7 +280,7 @@ export function MapDashboard({ status }: { status: DataStatus }) {
           }
         >
           <div className="flex flex-col gap-5">
-            {detail ? <div className="rounded-card border border-line p-4">{detail}</div> : null}
+            {detail ? <div className="rounded-xl border border-border p-4">{detail}</div> : null}
             <SummaryCards items={summary} compact />
             {topRegions}
             <TimeRangeControl value={filters.rentang} onChange={(rentang) => setFilters({ rentang })} hint={rangeHint} />

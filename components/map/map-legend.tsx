@@ -29,26 +29,26 @@ export function MapLegend({
     <details
       open={defaultOpen}
       className={clsx(
-        "group w-56 rounded-card border border-line bg-surface/95 text-xs text-fg backdrop-blur-sm",
+        "group w-56 rounded-xl border border-border bg-card/95 text-xs text-foreground backdrop-blur-sm",
         className,
       )}
     >
       <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between px-3 font-semibold [&::-webkit-details-marker]:hidden">
         Legenda
-        <span aria-hidden="true" className="text-fg-muted transition-transform group-open:rotate-180">
+        <span aria-hidden="true" className="text-muted-foreground transition-transform group-open:rotate-180">
           ▾
         </span>
       </summary>
       <div className="flex flex-col gap-3 px-3 pb-3">
         {layers.includes("risiko") ? (
           <div>
-            <p className="mb-1.5 font-medium text-fg-muted">Tingkat risiko (skor)</p>
+            <p className="mb-1.5 font-medium text-muted-foreground">Tingkat risiko (skor)</p>
             <ul className="flex flex-col gap-1">
               {RISK_LEVEL_ORDER.map((level) => (
                 <li key={level} className="flex items-center gap-2">
                   <RiskSwatch level={level} />
                   <span className="flex-1">{getRiskLabel(level)}</span>
-                  <span className="font-mono text-fg-muted">{RISK_RANGES[level]}</span>
+                  <span className="font-mono text-muted-foreground">{RISK_RANGES[level]}</span>
                 </li>
               ))}
             </ul>

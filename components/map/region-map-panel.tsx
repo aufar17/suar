@@ -47,7 +47,7 @@ export function RegionMapPanel({
   if (hotspots.loading || risk.loading) status.push({ kind: "loading", message: "Memuat peta…" });
 
   return (
-    <div className="map-frame relative isolate h-80 overflow-hidden rounded-card border border-line sm:h-[420px]">
+    <div className="map-frame relative isolate h-80 overflow-hidden rounded-xl border border-border sm:h-[420px]">
       <RegionMap
         slug={slug}
         name={name}
@@ -61,7 +61,7 @@ export function RegionMapPanel({
         <MapStatus items={status} />
       </div>
       <MapLegend layers={["risiko", "hotspot", "batas"]} defaultOpen={false} className="absolute bottom-6 left-3 z-[800]" />
-      <p className="absolute top-3 left-3 z-[800] flex items-center gap-1.5 rounded-lg border border-line bg-surface/95 px-2.5 py-1.5 text-xs text-fg">
+      <p className="absolute top-3 left-3 z-[800] flex items-center gap-1.5 rounded-lg border border-border bg-card/95 px-2.5 py-1.5 text-xs text-foreground">
         <HotspotGlyph size={8} /> Hotspot 7 hari · risiko besok
       </p>
     </div>

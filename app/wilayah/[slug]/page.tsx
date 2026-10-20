@@ -7,7 +7,7 @@ import { RegionMapPanel } from "@/components/map/region-map-panel";
 import { PredictionNote } from "@/components/panels/risk-detail";
 import { SummaryCards, type SummaryItem } from "@/components/panels/summary-cards";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
-import { Card, CardHeader } from "@/components/ui/card";
+import { Card, CardHeader } from "@/components/ui/legacy-card";
 import { Skeleton } from "@/components/ui/controls";
 import { RiskBadge } from "@/components/ui/risk-badge";
 import {
@@ -136,8 +136,8 @@ async function RegionContent({ slug }: { slug: string }) {
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-fg">{name}</h1>
-          <p className="mt-1 text-sm text-fg-muted">Data sampai {formatDate(today)}</p>
+          <h1 className="text-2xl font-semibold text-foreground">{name}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Data sampai {formatDate(today)}</p>
         </div>
         <RiskBadge level={tomorrowLevel} size="lg" prefix="Risiko besok:" className="self-start sm:self-auto" />
       </div>
@@ -158,10 +158,10 @@ async function RegionContent({ slug }: { slug: string }) {
           {weather ? (
             <div className="mt-4 flex flex-col gap-4">
               <div>
-                <p className="text-xs text-fg-muted">Hari tanpa hujan</p>
-                <p className="font-mono text-4xl font-semibold tracking-tight text-fg">
+                <p className="text-xs text-muted-foreground">Hari tanpa hujan</p>
+                <p className="font-mono text-4xl font-semibold tracking-tight text-foreground">
                   {formatInteger(weather.hari_tanpa_hujan)}
-                  <span className="ml-1 font-sans text-base font-medium text-fg-muted">hari</span>
+                  <span className="ml-1 font-sans text-base font-medium text-muted-foreground">hari</span>
                 </p>
               </div>
               <dl className="grid grid-cols-2 gap-3">
@@ -171,15 +171,15 @@ async function RegionContent({ slug }: { slug: string }) {
                   ["Curah hujan", `${formatDecimal(weather.curah_hujan_mm, 1)} mm`],
                   ["Angin", `${formatDecimal(weather.kecepatan_angin_kmh, 1)} km/jam`],
                 ].map(([label, value]) => (
-                  <div key={label} className="rounded-lg bg-surface-2 px-3 py-2">
-                    <dt className="text-xs text-fg-muted">{label}</dt>
-                    <dd className="font-mono text-base font-medium text-fg">{value}</dd>
+                  <div key={label} className="rounded-lg bg-muted px-3 py-2">
+                    <dt className="text-xs text-muted-foreground">{label}</dt>
+                    <dd className="font-mono text-base font-medium text-foreground">{value}</dd>
                   </div>
                 ))}
               </dl>
             </div>
           ) : (
-            <p className="mt-3 text-sm text-fg-muted">Data cuaca belum tersedia.</p>
+            <p className="mt-3 text-sm text-muted-foreground">Data cuaca belum tersedia.</p>
           )}
         </Card>
       </div>

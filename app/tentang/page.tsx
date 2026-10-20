@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { Card } from "@/components/ui/card";
+import { Card } from "@/components/ui/legacy-card";
 import { RiskBadge } from "@/components/ui/risk-badge";
 import { getDataStatus } from "@/lib/data";
 import { formatDate, formatDecimal } from "@/lib/format";
@@ -42,7 +42,7 @@ const SOURCES: { name: string; use: string; href: string }[] = [
 function Section({ id, title, children }: { id: string; title: string; children: ReactNode }) {
   return (
     <section aria-labelledby={id} className="flex flex-col gap-3">
-      <h2 id={id} className="text-lg font-semibold text-fg">
+      <h2 id={id} className="text-lg font-semibold text-foreground">
         {title}
       </h2>
       {children}
@@ -60,17 +60,17 @@ export default async function TentangPage() {
   };
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-8 text-[15px] leading-relaxed text-fg lg:px-6">
+    <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-8 text-[15px] leading-relaxed text-foreground lg:px-6">
       <header>
         <h1 className="text-2xl font-semibold">Tentang SiAPI</h1>
-        <p className="mt-2 text-fg-muted">
+        <p className="mt-2 text-muted-foreground">
           SiAPI (Sistem Analisis &amp; Prediksi Karhutla) memantau titik panas dan memperkirakan risiko kebakaran hutan
           dan lahan di Provinsi Riau untuk tujuh hari ke depan.
         </p>
       </header>
 
       {status.sumber === "mock" ? (
-        <Card className="border-accent/60 p-4">
+        <Card className="border-ember/60 p-4">
           <p className="text-sm">
             <strong className="font-semibold">Data contoh.</strong> Selama pengembangan, semua angka di dashboard ini
             berasal dari data tiruan (mock) yang dibuat otomatis, termasuk batas wilayah yang masih berupa poligon
@@ -99,11 +99,11 @@ export default async function TentangPage() {
               >
                 {source.name}
               </a>
-              <span className="text-fg-muted"> – {source.use}</span>
+              <span className="text-muted-foreground"> – {source.use}</span>
             </li>
           ))}
         </ul>
-        <p className="text-sm text-fg-muted">
+        <p className="text-sm text-muted-foreground">
           Data diolah sekali sehari oleh pipeline terpisah lalu disimpan di basis data spasial (PostgreSQL/PostGIS).
         </p>
       </Section>
@@ -132,10 +132,10 @@ export default async function TentangPage() {
       </Section>
 
       <Section id="level-risiko" title="Cara membaca tingkat risiko">
-        <div className="overflow-x-auto rounded-card border border-line">
+        <div className="overflow-x-auto rounded-xl border border-border">
           <table className="w-full text-left text-sm">
             <caption className="sr-only">Ambang skor untuk setiap tingkat risiko</caption>
-            <thead className="bg-surface-2 text-xs text-fg-muted">
+            <thead className="bg-muted text-xs text-muted-foreground">
               <tr>
                 <th scope="col" className="px-4 py-2 font-medium">
                   Tingkat
@@ -147,7 +147,7 @@ export default async function TentangPage() {
             </thead>
             <tbody>
               {RISK_LEVEL_ORDER.map((level) => (
-                <tr key={level} className="border-t border-line">
+                <tr key={level} className="border-t border-border">
                   <td className="px-4 py-2">
                     <RiskBadge level={level} size="sm" />
                   </td>
@@ -157,7 +157,7 @@ export default async function TentangPage() {
             </tbody>
           </table>
         </div>
-        <p className="text-sm text-fg-muted">
+        <p className="text-sm text-muted-foreground">
           Di peta, kotak berisiko rendah dibiarkan transparan agar peta dasar tetap terbaca.
         </p>
       </Section>

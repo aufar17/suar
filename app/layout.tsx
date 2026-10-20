@@ -1,19 +1,17 @@
 import type { Metadata, Viewport } from "next";
-import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
+import { Providers } from "@/components/providers";
 import { SiteHeader } from "@/components/ui/site-header";
-import { themeScript } from "@/components/ui/theme-script";
 import "./globals.css";
 
-const plexSans = IBM_Plex_Sans({
-  variable: "--font-plex-sans",
+const geistSans = Geist({
+  variable: "--font-geist-sans",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
 });
 
-const plexMono = IBM_Plex_Mono({
-  variable: "--font-plex-mono",
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
   subsets: ["latin"],
-  weight: ["400", "500", "600"],
 });
 
 const siteUrl =
@@ -39,33 +37,27 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#F3F4F0" },
-    { media: "(prefers-color-scheme: dark)", color: "#111614" },
+    { media: "(prefers-color-scheme: light)", color: "#fafafa" },
+    { media: "(prefers-color-scheme: dark)", color: "#09090b" },
   ],
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html
-      lang="id"
-      data-theme="light"
-      suppressHydrationWarning
-      className={`${plexSans.variable} ${plexMono.variable} antialiased`}
-    >
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
-      </head>
+    <html lang="id" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable}`}>
       <body className="flex min-h-dvh flex-col">
-        <a
-          href="#konten"
-          className="sr-only z-[2000] rounded-lg bg-primary px-4 py-3 text-primary-fg focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
-        >
-          Lewati ke konten
-        </a>
-        <SiteHeader />
-        <div id="konten" className="flex flex-1 flex-col">
-          {children}
-        </div>
+        <Providers>
+          <a
+            href="#konten"
+            className="sr-only z-[2000] rounded-lg bg-primary px-4 py-3 text-primary-foreground focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
+          >
+            Lewati ke konten
+          </a>
+          <SiteHeader />
+          <div id="konten" className="flex flex-1 flex-col">
+            {children}
+          </div>
+        </Providers>
       </body>
     </html>
   );

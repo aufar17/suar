@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { useTheme } from "@/components/ui/theme";
+import { useResolvedTheme } from "@/components/ui/theme";
 import type { BBox, HotspotCollection, RegionBoundaryCollection, RiskCellCollection } from "@/types";
 import { BoundaryLayer } from "./boundary-layer";
 import { HotspotLayer } from "./hotspot-layer";
@@ -20,7 +20,7 @@ export interface RegionMapProps {
 
 /** Region page map: the region's risk grid and hotspots, with its outline emphasized. */
 export default function RegionMap({ slug, name, bbox, hotspots, risk, boundaries, regionNames }: RegionMapProps) {
-  const theme = useTheme();
+  const theme = useResolvedTheme();
   const regionRisk = useMemo(
     () => risk && { ...risk, features: risk.features.filter((f) => f.properties.kabupaten === slug) },
     [risk, slug],

@@ -1,67 +1,91 @@
-import { clsx } from "clsx";
-import type { ComponentPropsWithoutRef, ReactNode } from "react";
+import * as React from "react"
+import { cn } from "@/lib/utils"
 
-export function Card({ className, ...props }: ComponentPropsWithoutRef<"section">) {
-  return <section className={clsx("rounded-card border border-line bg-surface", className)} {...props} />;
+function Card({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="card"
+      className={cn(
+        "flex flex-col gap-6 rounded-xl border bg-card py-6 text-card-foreground shadow-sm",
+        className
+      )}
+      {...props}
+    />
+  )
 }
 
-export function CardHeader({
-  title,
-  description,
-  action,
-  className,
-  titleAs: Title = "h2",
-}: {
-  title: ReactNode;
-  description?: ReactNode;
-  action?: ReactNode;
-  className?: string;
-  titleAs?: "h2" | "h3";
-}) {
+function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    <div className={clsx("flex items-start justify-between gap-3", className)}>
-      <div className="min-w-0">
-        <Title className="text-sm font-semibold text-fg">{title}</Title>
-        {description ? <p className="mt-0.5 text-xs text-fg-muted">{description}</p> : null}
-      </div>
-      {action}
-    </div>
-  );
+    <div
+      data-slot="card-header"
+      className={cn(
+        "@container/card-header grid auto-rows-min grid-rows-[auto_auto] items-start gap-2 px-6 has-data-[slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-6",
+        className
+      )}
+      {...props}
+    />
+  )
 }
 
-/** Summary tile: label, big mono value, optional supporting line. */
-export function StatCard({
-  label,
-  value,
-  hint,
-  className,
-  children,
-  mono = true,
-  compact = false,
-}: {
-  label: string;
-  value: ReactNode;
-  hint?: ReactNode;
-  className?: string;
-  children?: ReactNode;
-  /** Numbers use the mono face; names do not. */
-  mono?: boolean;
-  compact?: boolean;
-}) {
+function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    <Card className={clsx("flex min-w-0 flex-col gap-1", compact ? "p-3" : "p-4", className)}>
-      <p className="text-xs font-medium text-fg-muted">{label}</p>
-      <div
-        className={clsx(
-          "font-semibold tracking-tight text-fg",
-          mono && "font-mono",
-          compact ? "text-lg leading-snug break-words" : "truncate text-2xl",
-        )}
-      >
-        {value}
-      </div>
-      {hint ? <p className={clsx("text-xs text-fg-muted", !compact && "line-clamp-2")}>{hint}</p> : null}
-      {children}
-    </Card>
-  );
+    <div
+      data-slot="card-title"
+      className={cn("leading-none font-semibold", className)}
+      {...props}
+    />
+  )
+}
+
+function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="card-description"
+      className={cn("text-sm text-muted-foreground", className)}
+      {...props}
+    />
+  )
+}
+
+function CardAction({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="card-action"
+      className={cn(
+        "col-start-2 row-span-2 row-start-1 self-start justify-self-end",
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
+function CardContent({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="card-content"
+      className={cn("px-6", className)}
+      {...props}
+    />
+  )
+}
+
+function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="card-footer"
+      className={cn("flex items-center px-6 [.border-t]:pt-6", className)}
+      {...props}
+    />
+  )
+}
+
+export {
+  Card,
+  CardHeader,
+  CardFooter,
+  CardTitle,
+  CardAction,
+  CardDescription,
+  CardContent,
 }

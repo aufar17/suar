@@ -11,9 +11,9 @@ export default function ErrorPage({ error, reset }: { error: Error & { digest?: 
 
   return (
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center gap-4 px-4 py-16 text-center">
-      <AlertIcon className="size-10 text-accent" />
-      <h1 className="text-2xl font-semibold text-fg">Terjadi kesalahan</h1>
-      <p className="text-fg-muted">
+      <AlertIcon className="size-10 text-ember-ink" />
+      <h1 className="text-2xl font-semibold text-foreground">Terjadi kesalahan</h1>
+      <p className="text-muted-foreground">
         Data tidak dapat dimuat saat ini. Coba lagi beberapa saat lagi.
         {error.digest ? <span className="mt-1 block font-mono text-xs">Kode: {error.digest}</span> : null}
       </p>
@@ -21,13 +21,13 @@ export default function ErrorPage({ error, reset }: { error: Error & { digest?: 
         <button
           type="button"
           onClick={reset}
-          className="inline-flex min-h-11 items-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-fg hover:opacity-90"
+          className="inline-flex min-h-11 items-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-90"
         >
           Coba lagi
         </button>
         <Link
           href="/"
-          className="inline-flex min-h-11 items-center rounded-lg border border-line px-4 text-sm font-medium text-fg hover:bg-surface-2"
+          className="inline-flex min-h-11 items-center rounded-lg border border-border px-4 text-sm font-medium text-foreground hover:bg-muted"
         >
           Kembali ke peta
         </Link>

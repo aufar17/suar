@@ -1,6 +1,6 @@
 import { clsx } from "clsx";
 import type { ReactNode } from "react";
-import { StatCard } from "@/components/ui/card";
+import { StatCard } from "@/components/ui/legacy-card";
 import { Skeleton } from "@/components/ui/controls";
 
 export interface SummaryItem {

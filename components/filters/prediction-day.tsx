@@ -20,10 +20,10 @@ export function PredictionDaySlider({
   return (
     <div>
       <div className="mb-1 flex items-baseline justify-between gap-2">
-        <label htmlFor={id} className="text-xs font-medium text-fg-muted">
+        <label htmlFor={id} className="text-xs font-medium text-muted-foreground">
           Prediksi untuk
         </label>
-        <span className="text-sm font-medium text-fg">
+        <span className="text-sm font-medium text-foreground">
           <span className="font-mono">+{value}</span> · {formatDayShort(target)}
         </span>
       </div>
@@ -38,9 +38,9 @@ export function PredictionDaySlider({
         onChange={(event) => onChange(Number(event.target.value))}
         className="h-11 w-full cursor-pointer accent-[var(--primary)]"
       />
-      <div aria-hidden="true" className="flex justify-between px-0.5 font-mono text-[11px] text-fg-muted">
+      <div aria-hidden="true" className="flex justify-between px-0.5 font-mono text-[11px] text-muted-foreground">
         {PREDICTION_DAYS.map((day) => (
-          <span key={day} className={clsx(day === value && "font-semibold text-fg")}>
+          <span key={day} className={clsx(day === value && "font-semibold text-foreground")}>
             +{day}
           </span>
         ))}
@@ -74,7 +74,7 @@ export function PredictionDayChips({
             onClick={() => onChange(day)}
             className={clsx(
               "flex min-h-11 min-w-14 shrink-0 flex-col items-center justify-center rounded-lg border px-2 leading-tight",
-              active ? "border-primary bg-primary text-primary-fg" : "border-line bg-surface text-fg",
+              active ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-foreground",
             )}
           >
             <span className="font-mono text-xs font-semibold">+{day}</span>
@@ -91,10 +91,10 @@ export function OpacitySlider({ value, onChange }: { value: number; onChange: (v
   return (
     <div>
       <div className="mb-1 flex items-baseline justify-between">
-        <label htmlFor={id} className="text-xs font-medium text-fg-muted">
+        <label htmlFor={id} className="text-xs font-medium text-muted-foreground">
           Opasitas lapisan risiko
         </label>
-        <span className="font-mono text-xs text-fg">{formatPercent(value * 100)}</span>
+        <span className="font-mono text-xs text-foreground">{formatPercent(value * 100)}</span>
       </div>
       <input
         id={id}

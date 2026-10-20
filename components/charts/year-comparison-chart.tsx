@@ -36,7 +36,7 @@ export function YearComparisonChart({
 
   return (
     <div>
-      <ul aria-label="Legenda tahun" className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-fg">
+      <ul aria-label="Legenda tahun" className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-foreground">
         {years.map((year) => (
           <li key={year} className="flex items-center gap-1.5">
             <span

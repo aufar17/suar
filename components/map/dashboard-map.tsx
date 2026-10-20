@@ -1,6 +1,6 @@
 "use client";
 
-import { useTheme } from "@/components/ui/theme";
+import { useResolvedTheme } from "@/components/ui/theme";
 import type {
   ClusterCollection,
   ClusterFeature,
@@ -47,7 +47,7 @@ export default function DashboardMap({
   onSelectCluster,
   onSelectCell,
 }: DashboardMapProps) {
-  const theme = useTheme();
+  const theme = useResolvedTheme();
   return (
     <MapView label={label}>
       {layers.includes("gambut") && risk ? <PeatLayer cells={risk} theme={theme} /> : null}

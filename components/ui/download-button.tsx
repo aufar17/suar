@@ -27,8 +27,8 @@ export function DownloadCsvButton({
       className={clsx(
         "inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg px-4 text-sm font-medium",
         variant === "primary"
-          ? "bg-primary text-primary-fg hover:opacity-90"
-          : "border border-line text-fg hover:bg-surface-2",
+          ? "bg-primary text-primary-foreground hover:opacity-90"
+          : "border border-border text-foreground hover:bg-muted",
       )}
     >
       <DownloadIcon className="size-4" />

@@ -15,14 +15,14 @@ export function MapStatus({ items }: { items: MapStatusItem[] }) {
         <div
           key={`${item.kind}-${item.message}`}
           role={item.kind === "error" ? "alert" : "status"}
-          className="pointer-events-auto flex max-w-[calc(100vw-2rem)] items-center gap-2 rounded-full border border-line bg-surface px-3.5 py-2 text-sm text-fg shadow-sm"
+          className="pointer-events-auto flex max-w-[calc(100vw-2rem)] items-center gap-2 rounded-full border border-border bg-card px-3.5 py-2 text-sm text-foreground shadow-sm"
         >
           {item.kind === "loading" ? (
-            <span aria-hidden="true" className="size-3.5 animate-spin rounded-full border-2 border-line border-t-primary" />
+            <span aria-hidden="true" className="size-3.5 animate-spin rounded-full border-2 border-border border-t-primary" />
           ) : item.kind === "error" ? (
-            <AlertIcon className="size-4 shrink-0 text-accent" />
+            <AlertIcon className="size-4 shrink-0 text-ember-ink" />
           ) : (
-            <InfoIcon className="size-4 shrink-0 text-fg-muted" />
+            <InfoIcon className="size-4 shrink-0 text-muted-foreground" />
           )}
           <span className="min-w-0">{item.message}</span>
           {item.kind === "error" ? (

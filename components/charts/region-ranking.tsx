@@ -50,7 +50,7 @@ export function RegionRanking({
           rows={sorted.map((s) => [s.slug, s.nama, s.jumlah_hotspot, s.rata_skor_risiko])}
         />
       </div>
-      <p className="text-xs text-fg-muted">
+      <p className="text-xs text-muted-foreground">
         {sort === "hotspot" ? `Jumlah hotspot, ${hotspotPeriod}.` : `Rata-rata skor risiko prediksi untuk ${riskDateLabel}.`}
       </p>
       <ol className="flex flex-col gap-1">
@@ -62,21 +62,21 @@ export function RegionRanking({
               <Link
                 href={`/wilayah/${region.slug}`}
                 className={clsx(
-                  "-mx-2 grid min-h-11 grid-cols-[1.25rem_minmax(0,1fr)_auto] items-center gap-x-3 rounded-lg px-2 py-1.5 hover:bg-surface-2 sm:grid-cols-[1.25rem_minmax(0,9rem)_minmax(0,1fr)_auto]",
-                  active && "bg-primary-soft",
+                  "-mx-2 grid min-h-11 grid-cols-[1.25rem_minmax(0,1fr)_auto] items-center gap-x-3 rounded-lg px-2 py-1.5 hover:bg-muted sm:grid-cols-[1.25rem_minmax(0,9rem)_minmax(0,1fr)_auto]",
+                  active && "bg-muted",
                 )}
                 aria-current={active ? "true" : undefined}
               >
-                <span className="row-span-2 font-mono text-xs text-fg-muted sm:row-span-1">{index + 1}</span>
-                <span className={clsx("truncate text-sm", active ? "font-semibold text-fg" : "text-fg")}>{region.nama}</span>
-                <span aria-hidden="true" className="col-start-2 row-start-2 mt-1 h-2 rounded-r-[4px] bg-surface-2 sm:col-start-3 sm:row-start-1 sm:mt-0 sm:h-2.5">
+                <span className="row-span-2 font-mono text-xs text-muted-foreground sm:row-span-1">{index + 1}</span>
+                <span className={clsx("truncate text-sm", active ? "font-semibold text-foreground" : "text-foreground")}>{region.nama}</span>
+                <span aria-hidden="true" className="col-start-2 row-start-2 mt-1 h-2 rounded-r-[4px] bg-muted sm:col-start-3 sm:row-start-1 sm:mt-0 sm:h-2.5">
                   <span
-                    className={clsx("block h-full rounded-r-[4px]", active ? "bg-accent" : "bg-primary")}
+                    className={clsx("block h-full rounded-r-[4px]", active ? "bg-ember" : "bg-primary")}
                     style={{ width: `${Math.max(1, value * 100)}%` }}
                   />
                 </span>
                 <span className="col-start-3 row-span-2 row-start-1 flex items-center justify-end gap-2 sm:col-start-4 sm:row-span-1">
-                  <span className="w-12 text-right font-mono text-sm text-fg">
+                  <span className="w-12 text-right font-mono text-sm text-foreground">
                     {sort === "hotspot" ? formatInteger(region.jumlah_hotspot) : formatDecimal(region.rata_skor_risiko)}
                   </span>
                   {sort === "risiko" ? <RiskBadge level={getRiskLevel(region.rata_skor_risiko)} size="sm" /> : null}

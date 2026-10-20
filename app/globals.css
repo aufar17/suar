@@ -1,105 +1,179 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
-/* Dark mode follows the data-theme attribute set on <html> by the theme script. */
-@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+/* next-themes toggles the `dark` class on <html>. */
+@custom-variant dark (&:where(.dark, .dark *));
 
-:root,
-[data-theme="light"] {
+/* Design tokens ---------------------------------------------------------
+ * Neutral zinc scale, one ember accent (#E8590C) for what matters most.
+ * Contrast checked: body/muted text >= 4.5:1, UI boundaries >= 3:1.
+ */
+:root {
   color-scheme: light;
 
-  --bg: #f3f4f0;
-  --surface: #ffffff;
-  --surface-2: #eceee8;
-  --line: #dcdfd8;
-  --fg: #1c2321;
-  --fg-muted: #4f5752;
-  --primary: #1f3b36;
-  --primary-fg: #ffffff;
-  --primary-soft: #e3ebe8;
-  --accent: #c2521f;
-  --accent-fg: #ffffff;
-  --focus: #c2521f;
+  --radius: 0.75rem;
 
-  /* Risk scale. "rendah" is intentionally transparent on the map. */
+  --background: #fafafa;
+  --foreground: #09090b;
+  --card: #ffffff;
+  --card-foreground: #09090b;
+  --popover: #ffffff;
+  --popover-foreground: #09090b;
+  --primary: #18181b;
+  --primary-foreground: #fafafa;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #18181b;
+  --muted: #f4f4f5;
+  --muted-foreground: #5c5c66;
+  --accent: #f4f4f5;
+  --accent-foreground: #18181b;
+  --destructive: #dc2626;
+  --border: #e4e4e7;
+  --input: #d4d4d8;
+  --ring: #e8590c;
+  /* Unchecked switch track: needs 3:1 against the card. */
+  --control-off: #8b8b94;
+
+  /* Ember: `--ember` for fills/icons, `--ember-ink` for text on light surfaces. */
+  --ember: #e8590c;
+  --ember-foreground: #ffffff;
+  --ember-ink: #c2410c;
+  --ember-soft: #fff1e8;
+
+  /* Floating panels over the map. */
+  --glass: rgb(255 255 255 / 0.82);
+  --shadow-color: 240 6% 10%;
+
+  /* Risk scale. "rendah" is transparent on the map; badges use a neutral chip. */
   --risk-rendah: transparent;
-  --risk-rendah-badge: #e6e9e3;
-  --risk-rendah-fg: #1c2321;
-  --risk-sedang: #f3d27a;
-  --risk-sedang-fg: #1c2321;
-  --risk-tinggi: #e98a3d;
-  --risk-tinggi-fg: #1c2321;
-  --risk-sangat-tinggi: #9e2f1c;
+  --risk-rendah-chip: #f4f4f5;
+  --risk-rendah-fg: #3f3f46;
+  --risk-sedang: #facc15;
+  --risk-sedang-fg: #18181b;
+  --risk-tinggi: #f97316;
+  --risk-tinggi-fg: #18181b;
+  --risk-sangat-tinggi: #b91c1c;
   --risk-sangat-tinggi-fg: #ffffff;
 
   /* Map overlays */
-  --map-hotspot: #1c2321;
+  --map-hotspot: #18181b;
   --map-hotspot-stroke: #ffffff;
-  --map-cluster: #1c2321;
-  --map-boundary: #1f3b36;
-  --map-gambut: #7a6a3a;
+  --map-cluster: #18181b;
+  --map-boundary: #3f3f46;
+  --map-gambut: #8a6a2f;
+  --map-selection: #e8590c;
+  --map-selection-halo: #ffffff;
 
-  /* Charts (validated with the dataviz palette checks). */
-  --chart-line: #1f3b36;
-  --chart-year-current: #c2521f;
+  /* Charts (year palette validated with the dataviz checks). */
+  --chart-1: #27272a;
+  --chart-2: #e8590c;
+  --chart-3: #0e826b;
+  --chart-4: #7584c9;
+  --chart-5: #a1a1aa;
+  --chart-grid: #ececee;
+  --chart-year-current: #e8590c;
   --chart-year-1: #0e826b;
   --chart-year-2: #7584c9;
-  --chart-grid: #e6e8e3;
+
+  --header-h: 56px;
 }
 
-[data-theme="dark"] {
+.dark {
   color-scheme: dark;
 
-  --bg: #111614;
-  --surface: #1a201e;
-  --surface-2: #232b28;
-  --line: #2f3834;
-  --fg: #e8eae5;
-  --fg-muted: #a9b0ab;
-  --primary: #8fc2b5;
-  --primary-fg: #0f1a17;
-  --primary-soft: #23332f;
-  --accent: #e57f4a;
-  --accent-fg: #160b05;
-  --focus: #e57f4a;
+  --background: #09090b;
+  --foreground: #fafafa;
+  --card: #131316;
+  --card-foreground: #fafafa;
+  --popover: #18181b;
+  --popover-foreground: #fafafa;
+  --primary: #fafafa;
+  --primary-foreground: #18181b;
+  --secondary: #27272a;
+  --secondary-foreground: #fafafa;
+  --muted: #27272a;
+  --muted-foreground: #a1a1aa;
+  --accent: #27272a;
+  --accent-foreground: #fafafa;
+  --destructive: #ef4444;
+  --border: #27272a;
+  --input: #3f3f46;
+  --ring: #f97a3c;
+  --control-off: #6b6b75;
 
-  --risk-rendah: transparent;
-  --risk-rendah-badge: #2f3834;
-  --risk-rendah-fg: #e8eae5;
-  --risk-sedang: #f3d27a;
-  --risk-sedang-fg: #1c2321;
-  --risk-tinggi: #e98a3d;
-  --risk-tinggi-fg: #1c2321;
-  --risk-sangat-tinggi: #b5402a;
+  --ember: #e8590c;
+  --ember-foreground: #ffffff;
+  --ember-ink: #f97a3c;
+  --ember-soft: #2a160c;
+
+  --glass: rgb(19 19 22 / 0.78);
+  --shadow-color: 0 0% 0%;
+
+  --risk-rendah-chip: #27272a;
+  --risk-rendah-fg: #e4e4e7;
+  --risk-sedang: #facc15;
+  --risk-sedang-fg: #18181b;
+  --risk-tinggi: #f97316;
+  --risk-tinggi-fg: #18181b;
+  /* #B91C1C is only 3.07:1 on the dark background; red-600 keeps it readable. */
+  --risk-sangat-tinggi: #dc2626;
   --risk-sangat-tinggi-fg: #ffffff;
 
-  --map-hotspot: #f3f4f0;
-  --map-hotspot-stroke: #1c2321;
-  --map-cluster: #f3f4f0;
-  --map-boundary: #8fc2b5;
+  --map-hotspot: #fafafa;
+  --map-hotspot-stroke: #09090b;
+  --map-cluster: #fafafa;
+  --map-boundary: #a1a1aa;
   --map-gambut: #c9b67a;
+  --map-selection: #f97a3c;
+  --map-selection-halo: #09090b;
 
-  --chart-line: #8fc2b5;
-  --chart-year-current: #e07040;
+  --chart-1: #e4e4e7;
+  --chart-2: #f97a3c;
+  --chart-3: #239e83;
+  --chart-4: #7f8cd6;
+  --chart-5: #71717a;
+  --chart-grid: #232327;
+  --chart-year-current: #f07040;
   --chart-year-1: #239e83;
   --chart-year-2: #7f8cd6;
-  --chart-grid: #2a322f;
 }
 
 @theme inline {
-  --color-bg: var(--bg);
-  --color-surface: var(--surface);
-  --color-surface-2: var(--surface-2);
-  --color-line: var(--line);
-  --color-fg: var(--fg);
-  --color-fg-muted: var(--fg-muted);
-  --color-primary: var(--primary);
-  --color-primary-fg: var(--primary-fg);
-  --color-primary-soft: var(--primary-soft);
-  --color-accent: var(--accent);
-  --color-accent-fg: var(--accent-fg);
-  --color-focus: var(--focus);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 
-  --color-risk-rendah: var(--risk-rendah-badge);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-control-off: var(--control-off);
+
+  --color-ember: var(--ember);
+  --color-ember-foreground: var(--ember-foreground);
+  --color-ember-ink: var(--ember-ink);
+  --color-ember-soft: var(--ember-soft);
+  --color-glass: var(--glass);
+
+  --color-risk-rendah: var(--risk-rendah-chip);
   --color-risk-rendah-fg: var(--risk-rendah-fg);
   --color-risk-sedang: var(--risk-sedang);
   --color-risk-sedang-fg: var(--risk-sedang-fg);
@@ -108,91 +182,188 @@
   --color-risk-sangat-tinggi: var(--risk-sangat-tinggi);
   --color-risk-sangat-tinggi-fg: var(--risk-sangat-tinggi-fg);
 
-  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
 
-  --radius-card: 12px;
+  --shadow-panel: 0 1px 2px hsl(var(--shadow-color) / 0.06), 0 8px 24px -6px hsl(var(--shadow-color) / 0.14);
+  --shadow-float: 0 1px 2px hsl(var(--shadow-color) / 0.08), 0 12px 32px -8px hsl(var(--shadow-color) / 0.22);
 }
 
-:root {
-  /* Must match the header rows: mobile 56px + 44px nav, desktop 64px, plus 1px border. */
-  --header-h: 101px;
+/* Legacy raw variables still referenced by inline styles (charts, map glyphs). */
+:root,
+.dark {
+  --surface: var(--card);
+  --surface-2: var(--muted);
+  --line: var(--border);
+  --fg: var(--foreground);
+  --fg-muted: var(--muted-foreground);
+  --chart-line: var(--chart-1);
 }
 
-@media (min-width: 1024px) {
-  :root {
-    --header-h: 65px;
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+
+  /* Keyboard focus is always visible, in both themes. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* Components that draw their own focus ring opt out of the outline. */
+  [data-focus-ring]:focus-visible {
+    outline: none;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--ember) 28%, transparent);
   }
 }
 
-html,
-body {
-  background: var(--bg);
-  color: var(--fg);
+@utility tabular {
+  font-variant-numeric: tabular-nums;
 }
 
-/* Leaflet tweaks ------------------------------------------------------- */
+/* Hide scrollbars on horizontally scrolling rows but keep them scrollable. */
+@utility no-scrollbar {
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Translucent panel floating over the map. */
+@utility glass-panel {
+  background: var(--glass);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-panel);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Leaflet ---------------------------------------------------------------- */
 
 .leaflet-container {
   font-family: var(--font-sans);
-  background: var(--surface-2);
+  background: var(--muted);
 }
 
-/* Night-friendly basemap without a second tile provider. */
-[data-theme="dark"] .leaflet-tile-pane {
-  filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.85) saturate(0.5);
+.dark .leaflet-container {
+  background: #0e0e10;
 }
 
-/* 44px touch targets for zoom buttons. */
-.leaflet-touch .leaflet-bar a,
-.leaflet-bar a {
-  width: 44px;
-  height: 44px;
-  line-height: 44px;
-  font-size: 20px;
+.leaflet-container:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
 }
 
-.leaflet-bar a,
-.leaflet-bar a:hover {
-  background: var(--surface);
-  color: var(--fg);
-  border-bottom-color: var(--line);
-}
-
-.leaflet-bar a:hover {
-  background: var(--surface-2);
-}
-
-.leaflet-touch .leaflet-bar,
-.leaflet-bar {
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  box-shadow: none;
-  overflow: hidden;
+.leaflet-tile-pane {
+  transition: opacity 200ms ease;
 }
 
 .leaflet-control-attribution {
   font-size: 11px;
+  border-top-left-radius: 8px;
+  background: var(--glass) !important;
+  color: var(--muted-foreground);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
 }
 
-[data-theme="dark"] .leaflet-control-attribution {
-  background: rgb(26 32 30 / 0.85);
-  color: var(--fg-muted);
+.leaflet-control-attribution a {
+  color: var(--foreground);
 }
 
-[data-theme="dark"] .leaflet-control-attribution a {
-  color: var(--primary);
+.leaflet-tooltip.map-tooltip {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: var(--shadow-float);
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.leaflet-tooltip.map-tooltip::before {
+  display: none;
+}
+
+/* Region outline labels (no pointer events, follow the cursor). */
+.leaflet-tooltip.region-tooltip {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: var(--shadow-panel);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.leaflet-tooltip.region-tooltip::before {
+  display: none;
+}
+
+/* Legacy Leaflet controls (region map until it moves to custom controls). */
+.leaflet-bar,
+.leaflet-touch .leaflet-bar {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-panel);
+  overflow: hidden;
+}
+
+.leaflet-bar a,
+.leaflet-touch .leaflet-bar a {
+  width: 40px;
+  height: 40px;
+  line-height: 40px;
+  font-size: 18px;
+  background: var(--card);
+  color: var(--foreground);
+  border-bottom-color: var(--border);
+}
+
+.leaflet-bar a:hover {
+  background: var(--muted);
 }
 
 .leaflet-popup-content-wrapper,
 .leaflet-popup-tip {
-  background: var(--surface);
-  color: var(--fg);
-  box-shadow: 0 2px 10px rgb(0 0 0 / 0.15);
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: var(--shadow-float);
 }
 
 .leaflet-popup-content-wrapper {
-  border: 1px solid var(--line);
+  border: 1px solid var(--border);
   border-radius: 12px;
 }
 
@@ -202,25 +373,16 @@ body {
   line-height: 1.45;
 }
 
-.leaflet-container a.leaflet-popup-close-button {
-  width: 32px;
-  height: 32px;
-  font-size: 20px;
-  line-height: 30px;
-  color: var(--fg-muted);
-}
-
 .leaflet-tooltip {
-  background: var(--surface);
-  color: var(--fg);
-  border: 1px solid var(--line);
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--border);
   border-radius: 8px;
   box-shadow: none;
   font-size: 12px;
   font-weight: 500;
 }
 
-/* On small screens the map is overlaid by the layer chips (top) and the bottom sheet. */
 @media (max-width: 1279px) {
   .map-frame .leaflet-top {
     top: var(--map-top-inset, 0px);
@@ -229,22 +391,4 @@ body {
   .map-frame .leaflet-bottom {
     bottom: var(--map-bottom-inset, 0px);
   }
-}
-
-/* Hide scrollbars on horizontally scrolling chip rows but keep them scrollable. */
-.no-scrollbar {
-  scrollbar-width: none;
-}
-
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-
-body {
-  font-family: var(--font-sans);
-}
-
-:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
 }

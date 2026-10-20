@@ -5,7 +5,7 @@ import type { RiskLevel } from "@/types";
 import { ChartTable } from "./chart-parts";
 
 const BAR_CLASSES: Record<RiskLevel, string> = {
-  rendah: "bg-risk-rendah ring-1 ring-inset ring-line",
+  rendah: "bg-risk-rendah ring-1 ring-inset ring-border",
   sedang: "bg-risk-sedang",
   tinggi: "bg-risk-tinggi",
   sangat_tinggi: "bg-risk-sangat-tinggi",
@@ -26,7 +26,7 @@ export function RiskForecastChart({ days }: { days: { date: string; score: numbe
           {TICKS.map((tick) => (
             <span
               key={tick}
-              className="absolute right-0 translate-y-1/2 font-mono text-[11px] text-fg-muted"
+              className="absolute right-0 translate-y-1/2 font-mono text-[11px] text-muted-foreground"
               style={{ bottom: `${tick * 100}%` }}
             >
               {formatDecimal(tick)}
@@ -40,7 +40,7 @@ export function RiskForecastChart({ days }: { days: { date: string; score: numbe
               <span
                 key={tick}
                 aria-hidden="true"
-                className={clsx("absolute inset-x-0 h-px", tick === 0 ? "bg-line" : "bg-[var(--chart-grid)]")}
+                className={clsx("absolute inset-x-0 h-px", tick === 0 ? "bg-border" : "bg-[var(--chart-grid)]")}
                 style={{ bottom: `${tick * 100}%` }}
               />
             ))}
@@ -51,7 +51,7 @@ export function RiskForecastChart({ days }: { days: { date: string; score: numbe
                 return (
                   <li key={day.date} className="relative flex h-full items-end justify-center">
                     <span
-                      className="absolute font-mono text-[11px] font-medium text-fg sm:text-xs"
+                      className="absolute font-mono text-[11px] font-medium text-foreground sm:text-xs"
                       style={{ bottom: `calc(${height}% + 4px)` }}
                     >
                       {formatDecimal(day.score)}
@@ -71,9 +71,9 @@ export function RiskForecastChart({ days }: { days: { date: string; score: numbe
               const [weekday, date] = formatDayShort(day.date).split(", ");
               return (
                 <li key={day.date} className="text-center text-[11px] leading-tight">
-                  <span className="block text-fg">{weekday}</span>
-                  <span className="block text-fg-muted">{date}</span>
-                  <span className="mt-0.5 block text-[10px] text-fg-muted sm:text-[11px]">
+                  <span className="block text-foreground">{weekday}</span>
+                  <span className="block text-muted-foreground">{date}</span>
+                  <span className="mt-0.5 block text-[10px] text-muted-foreground sm:text-[11px]">
                     {getRiskLabel(getRiskLevel(day.score))}
                   </span>
                 </li>

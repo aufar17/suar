@@ -33,11 +33,11 @@ function NavList({ className, variant, pathname }: NavLinksProps & { pathname: s
                   "flex min-h-11 items-center justify-center text-sm font-medium transition-colors",
                   variant === "desktop" && "rounded-lg px-3.5",
                   variant === "desktop" &&
-                    (active ? "bg-primary text-primary-fg" : "text-fg-muted hover:bg-surface-2 hover:text-fg"),
+                    (active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"),
                   variant === "mobile" &&
                     (active
-                      ? "border-b-2 border-primary text-fg"
-                      : "border-b-2 border-transparent text-fg-muted hover:text-fg"),
+                      ? "border-b-2 border-primary text-foreground"
+                      : "border-b-2 border-transparent text-muted-foreground hover:text-foreground"),
                 )}
               >
                 {item.label}

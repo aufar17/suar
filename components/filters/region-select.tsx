@@ -14,7 +14,7 @@ export function RegionSelect({ regions, value }: { regions: Region[]; value: str
 
   return (
     <div className="flex min-w-0 flex-col gap-1">
-      <label htmlFor={id} className="text-xs font-medium text-fg-muted">
+      <label htmlFor={id} className="text-xs font-medium text-muted-foreground">
         Kabupaten/kota
       </label>
       <select
@@ -28,7 +28,7 @@ export function RegionSelect({ regions, value }: { regions: Region[]; value: str
           const query = params.toString();
           startTransition(() => router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false }));
         }}
-        className="min-h-11 w-full rounded-lg border border-line bg-surface px-3 text-sm text-fg sm:w-64"
+        className="min-h-11 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground sm:w-64"
       >
         <option value="">Semua (Provinsi Riau)</option>
         {regions.map((region) => (

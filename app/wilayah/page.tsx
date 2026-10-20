@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Card } from "@/components/ui/card";
+import { Card } from "@/components/ui/legacy-card";
 import { ChevronRightIcon } from "@/components/ui/icons";
 import { RiskBadge } from "@/components/ui/risk-badge";
 import { getDataStatus, getRegions, getRegionStats } from "@/lib/data";
@@ -24,8 +24,8 @@ export default async function WilayahIndexPage() {
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-6 lg:px-6">
       <div>
-        <h1 className="text-2xl font-semibold text-fg">Wilayah</h1>
-        <p className="mt-1 text-sm text-fg-muted">
+        <h1 className="text-2xl font-semibold text-foreground">Wilayah</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           12 kabupaten/kota di Provinsi Riau. Risiko untuk {formatDayShort(status.prediksi_mulai)}, hotspot 30 hari
           terakhir.
         </p>
@@ -39,15 +39,15 @@ export default async function WilayahIndexPage() {
               <Card className="h-full transition-colors hover:border-primary">
                 <Link href={`/wilayah/${region.slug}`} className="flex min-h-11 items-center gap-3 p-4">
                   <span className="min-w-0 flex-1">
-                    <span className="block text-xs text-fg-muted">{region.level === "kota" ? "Kota" : "Kabupaten"}</span>
-                    <span className="block truncate text-base font-semibold text-fg">{region.nama}</span>
-                    <span className="mt-1 block text-xs text-fg-muted">
-                      <span className="font-mono text-fg">{formatInteger(stat?.jumlah_hotspot ?? 0)}</span> hotspot ·
-                      skor <span className="font-mono text-fg">{formatDecimal(score)}</span>
+                    <span className="block text-xs text-muted-foreground">{region.level === "kota" ? "Kota" : "Kabupaten"}</span>
+                    <span className="block truncate text-base font-semibold text-foreground">{region.nama}</span>
+                    <span className="mt-1 block text-xs text-muted-foreground">
+                      <span className="font-mono text-foreground">{formatInteger(stat?.jumlah_hotspot ?? 0)}</span> hotspot ·
+                      skor <span className="font-mono text-foreground">{formatDecimal(score)}</span>
                     </span>
                   </span>
                   <RiskBadge level={getRiskLevel(score)} size="sm" />
-                  <ChevronRightIcon className="size-4 shrink-0 text-fg-muted" />
+                  <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
                 </Link>
               </Card>
             </li>

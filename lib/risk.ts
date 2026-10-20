@@ -17,23 +17,23 @@ export function getRiskLevel(score: number): RiskLevel {
   return "rendah";
 }
 
-const RISK_COLORS: Record<RiskLevel, string> = {
-  rendah: "transparent",
-  sedang: "#F3D27A",
-  tinggi: "#E98A3D",
-  sangat_tinggi: "#9E2F1C",
+// Mirrors the --risk-* tokens in app/globals.css. In dark mode "sangat tinggi" is lighter
+// (#B91C1C is only 3.07:1 against the dark background).
+const RISK_COLORS: Record<"light" | "dark", Record<RiskLevel, string>> = {
+  light: { rendah: "transparent", sedang: "#FACC15", tinggi: "#F97316", sangat_tinggi: "#B91C1C" },
+  dark: { rendah: "transparent", sedang: "#FACC15", tinggi: "#F97316", sangat_tinggi: "#DC2626" },
 };
 
 const RISK_TEXT_COLORS: Record<RiskLevel, string> = {
-  rendah: "#1C2321",
-  sedang: "#1C2321",
-  tinggi: "#1C2321",
+  rendah: "#18181B",
+  sedang: "#18181B",
+  tinggi: "#18181B",
   sangat_tinggi: "#FFFFFF",
 };
 
 /** Fill color for map layers. "rendah" is transparent on purpose. */
-export function getRiskColor(level: RiskLevel): string {
-  return RISK_COLORS[level];
+export function getRiskColor(level: RiskLevel, theme: "light" | "dark" = "light"): string {
+  return RISK_COLORS[theme][level];
 }
 
 /** Readable text color on top of {@link getRiskColor}. */
