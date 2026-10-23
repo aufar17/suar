@@ -171,8 +171,13 @@ function CommandShortcut({
   )
 }
 
+function CommandLoading({ className, ...props }: React.ComponentProps<typeof CommandPrimitive.Loading>) {
+  return <CommandPrimitive.Loading data-slot="command-loading" className={cn("px-2 py-3", className)} {...props} />
+}
+
 export {
   Command,
+  CommandLoading,
   CommandDialog,
   CommandInput,
   CommandList,

@@ -12,21 +12,29 @@ import { DownloadCsvButton } from "@/components/ui/download-button";
 import { RiskBadge } from "@/components/ui/risk-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/state";
-import { getDataStatus, getMonthlyTrend, getRegions, getRegionStats, getRiskCells } from "@/lib/data";
-import { addDaysIso, formatDate, formatDayShort, formatDecimal, formatInteger, formatMonth } from "@/lib/format";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getDataStatus, getMonthlyTrend, getRegions, getRegionStats } from "@/lib/data";
+import {
+  addDaysIso,
+  formatDate,
+  formatDayShort,
+  formatDecimal,
+  formatInteger,
+  formatMonth,
+  shiftMonth,
+} from "@/lib/format";
+import { regionDisplayName } from "@/lib/labels";
 import { getRiskLevel } from "@/lib/risk";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "Statistik",
-  description: "Tren bulanan hotspot, perbandingan antar tahun, dan peringkat kabupaten/kota di Provinsi Riau.",
+  description:
+    "Tren bulanan hotspot, perbandingan antar tahun, dan peringkat provinsi serta kabupaten/kota di seluruh Indonesia.",
 };
 
-function shiftMonth(month: string, delta: number): string {
-  const [year, m] = month.split("-").map(Number);
-  const index = year * 12 + (m - 1) + delta;
-  return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, "0")}`;
-}
+/** Regencies shown nationally before "Tampilkan semua". */
+const NATIONAL_REGENCY_LIMIT = 25;
 
 export default function StatistikPage({ searchParams }: PageProps<"/statistik">) {
   return (
@@ -40,21 +48,26 @@ export default function StatistikPage({ searchParams }: PageProps<"/statistik">)
 
 async function StatsContent({ searchParams }: { searchParams: PageProps<"/statistik">["searchParams"] }) {
   const params = await searchParams;
-  const requested = typeof params.kabupaten === "string" ? params.kabupaten : null;
+  const param = (key: string) => (typeof params[key] === "string" ? params[key] : null);
 
   const [status, regions] = await Promise.all([getDataStatus(), getRegions()]);
-  const region = regions.find((r) => r.slug === requested) ?? null;
-  const slug = region?.slug;
+  const province = regions.find((r) => r.slug === param("provinsi") && r.level === "provinsi") ?? null;
+  const regency = province
+    ? (regions.find((r) => r.slug === param("kabupaten") && r.provinsi === province.slug) ?? null)
+    : null;
+  const scope = regency ?? province;
+  const slug = scope?.slug;
 
   const endMonth = status.tanggal_data.slice(0, 7);
   const startMonth = shiftMonth(endMonth, -23);
   const currentYear = Number(endMonth.slice(0, 4));
   const rankingStart = addDaysIso(status.tanggal_data, -364);
+  const rankingWindow = { date: status.prediksi_mulai, start: rankingStart, end: status.tanggal_data };
 
-  const [trend, stats, cells] = await Promise.all([
+  const [trend, provinceStats, regencyStats] = await Promise.all([
     getMonthlyTrend({ start: startMonth, end: endMonth, slug }),
-    getRegionStats({ date: status.prediksi_mulai, start: rankingStart, end: status.tanggal_data }),
-    getRiskCells({ targetDate: status.prediksi_mulai }),
+    getRegionStats({ ...rankingWindow, level: "provinsi" }),
+    getRegionStats({ ...rankingWindow, level: "kabupaten", provinsi: province?.slug }),
   ]);
 
   // Summary
@@ -69,32 +82,44 @@ async function StatsContent({ searchParams }: { searchParams: PageProps<"/statis
   const change = lastYear > 0 ? ((thisYear - lastYear) / lastYear) * 100 : null;
   const peakIndex = trend.reduce((best, d, i) => (d.jumlah_hotspot > trend[best].jumlah_hotspot ? i : best), 0);
   const peak = trend[peakIndex];
-  const scopedCells = cells.features.filter((f) => !slug || f.properties.kabupaten === slug);
-  const meanRisk = scopedCells.length
-    ? scopedCells.reduce((s, f) => s + f.properties.skor_risiko, 0) / scopedCells.length
-    : 0;
+
+  // Mean risk of the scope, weighted by grid cells for the whole country.
+  const scopeStat = regency
+    ? regencyStats.find((s) => s.slug === regency.slug)
+    : province
+      ? provinceStats.find((s) => s.slug === province.slug)
+      : undefined;
+  const nationalCells = provinceStats.reduce((n, s) => n + s.jumlah_sel, 0);
+  const meanRisk = scope
+    ? (scopeStat?.rata_skor_risiko ?? 0)
+    : nationalCells
+      ? provinceStats.reduce((s, p) => s + p.rata_skor_risiko * p.jumlah_sel, 0) / nationalCells
+      : 0;
+  const cellCount = scope ? (scopeStat?.jumlah_sel ?? 0) : nationalCells;
   const meanLevel = getRiskLevel(meanRisk);
 
-  const scopeName = region ? region.nama : "Provinsi Riau";
+  const scopeName = scope ? regionDisplayName(scope) : "Indonesia";
   const periodLabel = `${formatMonth(startMonth)} – ${formatMonth(endMonth)}`;
   const rising = change !== null && change >= 0;
+  const hotspotPeriod = `${formatDate(rankingStart)} – ${formatDate(status.tanggal_data)}`;
+  const riskDateLabel = formatDayShort(status.prediksi_mulai);
 
   return (
     <>
-      <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div>
+      <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0">
           <p className="text-sm font-medium text-ember-ink">Statistik</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">Hotspot {scopeName}</h1>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-balance sm:text-4xl">Hotspot {scopeName}</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Data sampai {formatDate(status.tanggal_data)} · prediksi risiko untuk {formatDayShort(status.prediksi_mulai)}
+            Data sampai {formatDate(status.tanggal_data)} · prediksi risiko untuk {riskDateLabel}
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <RegionSelect regions={regions} value={region?.slug ?? null} />
+          <RegionSelect regions={regions} provinsi={province?.slug ?? null} kabupaten={regency?.slug ?? null} />
           <DownloadCsvButton
-            filename={`siapi-hotspot-bulanan-${slug ?? "riau"}.csv`}
+            filename={`siapi-hotspot-bulanan-${slug ?? "indonesia"}.csv`}
             header={["bulan", "wilayah", "jumlah_hotspot"]}
-            rows={trend.map((d) => [d.bulan, slug ?? "riau", d.jumlah_hotspot])}
+            rows={trend.map((d) => [d.bulan, slug ?? "indonesia", d.jumlah_hotspot])}
           />
         </div>
       </header>
@@ -150,7 +175,7 @@ async function StatsContent({ searchParams }: { searchParams: PageProps<"/statis
               <RiskBadge level={meanLevel} className="font-sans" />
             </span>
           }
-          hint={`${scopedCells.length ? formatInteger(scopedCells.length) : "–"} kotak grid · ${formatDayShort(status.prediksi_mulai)}`}
+          hint={`${cellCount ? formatInteger(cellCount) : "–"} kotak grid · ${riskDateLabel}`}
           className="sm:col-span-2"
           figure={<ScoreGauge score={meanRisk} level={meanLevel} />}
         />
@@ -163,24 +188,54 @@ async function StatsContent({ searchParams }: { searchParams: PageProps<"/statis
           <EmptyState
             icon={FlameKindling}
             title={`Belum ada hotspot tercatat di ${scopeName}`}
-            description={`Tidak ada titik panas pada ${periodLabel}. Pilih wilayah lain atau lihat seluruh provinsi.`}
+            description={`Tidak ada titik panas pada ${periodLabel}. Pilih wilayah lain atau lihat seluruh Indonesia.`}
           />
         )}
       </section>
 
       <section aria-labelledby="peringkat" className="rounded-2xl border bg-card p-4 shadow-xs sm:p-6">
-        <div className="mb-4">
-          <h2 id="peringkat" className="text-base font-semibold tracking-tight">
-            Peringkat kabupaten/kota
-          </h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">Klik nama wilayah untuk membuka halaman detailnya.</p>
-        </div>
-        <RegionRanking
-          stats={stats}
-          highlight={region?.slug ?? null}
-          hotspotPeriod={`${formatDate(rankingStart)} – ${formatDate(status.tanggal_data)}`}
-          riskDateLabel={formatDayShort(status.prediksi_mulai)}
-        />
+        <Tabs defaultValue={province ? "kabupaten" : "provinsi"} className="gap-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <h2 id="peringkat" className="text-base font-semibold tracking-tight">
+                Peringkat wilayah
+              </h2>
+              <p className="mt-0.5 text-sm text-muted-foreground">Klik nama wilayah untuk membuka halaman detailnya.</p>
+            </div>
+            <TabsList className="w-full sm:w-auto">
+              <TabsTrigger value="provinsi" className="px-3">
+                Provinsi
+              </TabsTrigger>
+              <TabsTrigger value="kabupaten" className="px-3">
+                Kabupaten/kota
+              </TabsTrigger>
+            </TabsList>
+          </div>
+          <TabsContent value="provinsi">
+            <RegionRanking
+              stats={provinceStats}
+              highlight={province?.slug ?? null}
+              hotspotPeriod={hotspotPeriod}
+              riskDateLabel={riskDateLabel}
+              filename="siapi-peringkat-provinsi.csv"
+            />
+          </TabsContent>
+          <TabsContent value="kabupaten" className="flex flex-col gap-3">
+            <p className="text-sm text-muted-foreground">
+              {province
+                ? `${formatInteger(regencyStats.length)} kabupaten/kota di Provinsi ${province.nama}.`
+                : `Seluruh ${formatInteger(regencyStats.length)} kabupaten/kota di Indonesia. Pilih provinsi untuk mempersempit.`}
+            </p>
+            <RegionRanking
+              stats={regencyStats}
+              highlight={regency?.slug ?? null}
+              hotspotPeriod={hotspotPeriod}
+              riskDateLabel={riskDateLabel}
+              filename={`siapi-peringkat-kabupaten-${province?.slug ?? "indonesia"}.csv`}
+              limit={province ? undefined : NATIONAL_REGENCY_LIMIT}
+            />
+          </TabsContent>
+        </Tabs>
       </section>
     </>
   );
@@ -189,14 +244,15 @@ async function StatsContent({ searchParams }: { searchParams: PageProps<"/statis
 function StatsSkeleton() {
   return (
     <div role="status" aria-label="Memuat statistik" className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="flex flex-col gap-2">
           <Skeleton className="h-4 w-16" />
           <Skeleton className="h-10 w-72" />
           <Skeleton className="h-4 w-80 max-w-full" />
         </div>
-        <div className="flex gap-2">
-          <Skeleton className="h-10 w-60" />
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Skeleton className="h-10 w-56" />
+          <Skeleton className="h-10 w-56" />
           <Skeleton className="h-10 w-32" />
         </div>
       </div>

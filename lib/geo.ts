@@ -1,7 +1,9 @@
 import type { BBox, Position } from "@/types/geojson";
 
-export const RIAU_BBOX: BBox = [100.0, -1.1, 103.8, 2.9];
-export const RIAU_CENTER: Position = [101.9, 0.55];
+/** Extent of Indonesia's land area. */
+export const INDONESIA_BBOX: BBox = [95.0, -11.0, 141.0, 5.9];
+/** The map may be panned a little beyond Indonesia, but not further. */
+export const INDONESIA_MAX_BBOX: BBox = [88.0, -16.0, 148.0, 11.0];
 
 const KM_PER_DEG_LAT = 110.57;
 const KM_PER_DEG_LON_EQUATOR = 111.32;
@@ -46,7 +48,7 @@ export function bboxIntersects(a: BBox, b: BBox): boolean {
   return a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && a[3] >= b[1];
 }
 
-/** Approximate area of a ring in km² (equirectangular projection, fine at Riau's scale). */
+/** Approximate area of a ring in km² (equirectangular projection, fine at regency scale). */
 export function ringAreaKm2(ring: Position[]): number {
   if (ring.length < 3) return 0;
   const meanLat = ring.reduce((sum, [, lat]) => sum + lat, 0) / ring.length;

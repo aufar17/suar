@@ -5,7 +5,7 @@ import type L from "leaflet";
  * stacking is the draw order. Separate canvas panes would block clicks to the layers below.
  * Bottom to top:
  */
-export const LAYER_ORDER = ["gambut", "risiko", "batas", "zona", "sorotan", "hotspot"] as const;
+export const LAYER_ORDER = ["wilayah", "gambut", "risiko", "batas", "zona", "sorotan", "hotspot"] as const;
 export type OrderedLayer = (typeof LAYER_ORDER)[number];
 
 const registries = new WeakMap<L.Map, Map<OrderedLayer, L.FeatureGroup>>();

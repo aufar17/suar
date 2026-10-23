@@ -34,9 +34,20 @@ export const FACTOR_LABELS: Record<string, string> = {
   ndvi: "Kondisi vegetasi",
 };
 
-/** "Kab. Siak" / "Kota Dumai" */
+/** "Kab. Siak" / "Kota Dumai" / "Provinsi Riau" */
 export function regionDisplayName(region: Pick<Region, "nama" | "level">): string {
   if (region.level === "kota") return `Kota ${region.nama}`;
   if (region.level === "kabupaten") return `Kab. ${region.nama}`;
-  return region.nama;
+  return `Provinsi ${region.nama}`;
+}
+
+export const REGION_LEVEL_LABELS: Record<Region["level"], string> = {
+  provinsi: "Provinsi",
+  kabupaten: "Kabupaten",
+  kota: "Kota",
+};
+
+/** Region page: `/wilayah/riau` for a province, `/wilayah/riau/siak` for a regency or city. */
+export function regionHref(region: Pick<Region, "slug" | "provinsi">): string {
+  return region.provinsi ? `/wilayah/${region.provinsi}/${region.slug}` : `/wilayah/${region.slug}`;
 }

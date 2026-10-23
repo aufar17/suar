@@ -116,7 +116,7 @@ const LIMITATIONS: { title: string; body: string; icon: LucideIcon }[] = [
   {
     title: "Data mock selama pengembangan.",
     icon: FlaskConical,
-    body: "Sampai pipeline data tersambung, seluruh angka dan batas wilayah adalah data contoh dan tidak boleh dipakai untuk keputusan.",
+    body: "Sampai pipeline data tersambung, seluruh angka (hotspot, prediksi, cuaca) adalah data contoh dan tidak boleh dipakai untuk keputusan. Batas wilayah sudah memakai data geoBoundaries, tetapi belum mengikuti pemekaran provinsi di Papua tahun 2022.",
   },
 ];
 
@@ -163,8 +163,8 @@ export default async function TentangPage() {
             <FlaskConical aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-ember-ink" />
             <p>
               <strong className="font-semibold">Data contoh.</strong> Selama pengembangan, semua angka di dashboard ini
-              berasal dari data tiruan (mock) yang dibuat otomatis, termasuk batas wilayah yang masih berupa poligon
-              perkiraan. Data terakhir: {formatDate(status.tanggal_data)}.
+              berasal dari data tiruan (mock) yang dibuat otomatis di atas batas wilayah asli dari geoBoundaries. Data
+              terakhir: {formatDate(status.tanggal_data)}.
             </p>
           </div>
         ) : null}

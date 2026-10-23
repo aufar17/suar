@@ -50,9 +50,12 @@ Untuk menggeser tanggalnya:
 MOCK_END_DATE=2026-11-05 pnpm mock:generate
 ```
 
-Isinya: 12 kabupaten/kota dengan **batas placeholder** (bukan batas resmi), ±4.000 kotak grid 5 km (±40% gambut),
-hotspot 24 bulan, zona kebakaran hari terakhir, prediksi risiko 7 hari dengan 3 faktor SHAP, dan cuaca terbaru.
-Data besar disimpan ringkas (lihat `types/mock.ts`) dan diubah ke GeoJSON oleh `lib/data/mock.ts`.
+Generator memakai batas wilayah asli dari `pnpm geo:build` (jalankan sekali dulu). Isinya untuk seluruh Indonesia:
+±76.000 kotak grid 5 km di daratan (±9% gambut, terkonsentrasi di Riau, Jambi, Sumatera Selatan, Kalimantan, dan Papua
+bagian selatan), ±190.000 hotspot 24 bulan yang semuanya jatuh di daratan (terbanyak di provinsi rawan, puncak
+Juli–Oktober), zona kebakaran hari terakhir, prediksi risiko 7 hari untuk setiap kotak, dan cuaca terbaru per
+kabupaten/kota. Total ±13 MB. Data besar disimpan ringkas (lihat `types/mock.ts`) dan diubah ke GeoJSON oleh
+`lib/data/mock.ts`; faktor SHAP setiap kotak dihitung ulang dari input model mock (`lib/mock-model.ts`).
 
 ## Variabel lingkungan
 
@@ -85,13 +88,14 @@ error menyebutkan field yang bermasalah.
 ## Arsitektur singkat
 
 ```
-app/                 halaman (/, /statistik, /wilayah, /wilayah/[slug], /tentang) dan route handler app/api/*
+app/                 halaman (/, /statistik, /wilayah, /wilayah/[provinsi], /wilayah/[provinsi]/[kabupaten], /tentang)
+                     dan route handler app/api/*
 components/          map/ (Leaflet, hanya client), charts/, filters/, panels/, ui/
 lib/data/            lapisan data: types.ts (interface DataSource), mock.ts, supabase.ts, index.ts (pemilih + cache)
 lib/                 risk.ts (level & warna risiko), format.ts (angka & tanggal Indonesia), geo.ts, api.ts
 types/               tipe TypeScript + skema zod untuk semua data
 mock/                file data mock
-scripts/             generate-mock.ts
+scripts/             generate-mock.ts, build-geo.ts (batas wilayah)
 docs/                kontrak RPC Supabase
 ```
 
@@ -106,16 +110,20 @@ docs/                kontrak RPC Supabase
 
 | Route | Parameter |
 | --- | --- |
-| `GET /api/hotspots` | `start`, `end` (`YYYY-MM-DD`, maks. 31 hari), `min_confidence`, `bbox` |
-| `GET /api/clusters` | `date` |
-| `GET /api/risk` | `target_date`, `bbox` |
-| `GET /api/regions` | – (GeoJSON batas wilayah) |
-| `GET /api/stats/trend` | `start`, `end` (`YYYY-MM`), `slug` |
-| `GET /api/stats/regions` | `date`, `start`, `end` |
-| `GET /api/weather` | `slug` (opsional) |
+| `GET /api/hotspots` | `start`, `end` (`YYYY-MM-DD`, maks. 31 hari), `min_confidence`, `bbox`, `provinsi`, `kabupaten` |
+| `GET /api/hotspots/groups` | sama dengan `/api/hotspots` + `zoom` wajib: hotspot dikelompokkan (supercluster) untuk zoom jauh |
+| `GET /api/clusters` | `date`, `bbox`, `provinsi`, `kabupaten` |
+| `GET /api/risk` | `target_date`, dan salah satu dari `bbox` (maks. 25 derajat persegi), `provinsi`, `kabupaten` |
+| `GET /api/regions` | `level` (`provinsi` default, atau `kabupaten`), `provinsi` – GeoJSON batas wilayah |
+| `GET /api/regions/lines` | – garis batas antarprovinsi (berimpit dengan batas kabupaten) |
+| `GET /api/regions/list` | – daftar semua wilayah + bbox (pencarian) |
+| `GET /api/stats/trend` | `start`, `end` (`YYYY-MM`), `slug` (provinsi atau kabupaten/kota; kosong = Indonesia) |
+| `GET /api/stats/regions` | `level` (`kabupaten` default, atau `provinsi`), `provinsi`, `date`, `start`, `end`, `min_confidence` – ringkasan per wilayah: jumlah hotspot, rata-rata dan maksimum skor risiko |
+| `GET /api/weather` | `slug` atau `provinsi` (opsional) |
 | `GET /api/status` | – |
 
-`bbox` berformat `minLon,minLat,maxLon,maxLat`. Parameter tidak valid menghasilkan HTTP 400 dengan pesan per parameter.
+`bbox` berformat `minLon,minLat,maxLon,maxLat`; `provinsi` dan `kabupaten` berisi slug. Parameter tidak valid
+(termasuk slug yang tidak dikenal) menghasilkan HTTP 400 dengan pesan per parameter.
 
 ## Deploy ke Vercel
 

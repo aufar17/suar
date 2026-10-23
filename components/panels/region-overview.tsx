@@ -1,8 +1,8 @@
 import { CalendarClock, CloudRain, Droplets, Flame, FlameKindling, Gauge, Sprout, Sun, Thermometer, Wind } from "lucide-react";
-import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { Suspense, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { MonthlyBarChart } from "@/components/charts/lazy";
+import { RegionRanking } from "@/components/charts/region-ranking";
 import { RiskForecastChart } from "@/components/charts/risk-forecast-chart";
 import { Sparkline } from "@/components/charts/sparkline";
 import { RegionSwitcher } from "@/components/filters/region-switcher";
@@ -22,53 +22,22 @@ import {
   getRegionStats,
   getWeather,
 } from "@/lib/data";
-import { addDaysIso, formatDate, formatDayShort, formatDecimal, formatInteger, formatMonth, formatPercent } from "@/lib/format";
-import { regionDisplayName } from "@/lib/labels";
+import {
+  addDaysIso,
+  formatDate,
+  formatDayShort,
+  formatDecimal,
+  formatInteger,
+  formatMonth,
+  formatPercent,
+  shiftMonth,
+} from "@/lib/format";
+import { REGION_LEVEL_LABELS, regionDisplayName, regionHref } from "@/lib/labels";
 import { getRiskLevel } from "@/lib/risk";
 
-// Every valid slug is prerendered by generateStaticParams. The slug is checked before the
-// Suspense boundary so unknown slugs get a real HTTP 404 instead of a streamed soft 404,
-// which means this segment cannot also pass the instant-navigation validation.
-export const instant = false;
-
-export async function generateStaticParams() {
-  const regions = await getRegions();
-  return regions.map((region) => ({ slug: region.slug }));
-}
-
-export async function generateMetadata({ params }: PageProps<"/wilayah/[slug]">): Promise<Metadata> {
-  const { slug } = await params;
-  const region = await getRegionDetail(slug);
-  if (!region) return { title: "Wilayah tidak ditemukan" };
-  const name = regionDisplayName(region);
-  return {
-    title: name,
-    description: `Hotspot terbaru, cuaca, prediksi risiko kebakaran 7 hari, dan tren bulanan untuk ${name}, Riau.`,
-  };
-}
-
-function shiftMonth(month: string, delta: number): string {
-  const [year, m] = month.split("-").map(Number);
-  const index = year * 12 + (m - 1) + delta;
-  return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, "0")}`;
-}
-
-export default async function WilayahPage({ params }: PageProps<"/wilayah/[slug]">) {
-  const { slug } = await params;
-  const regions = await getRegions();
-  if (!regions.some((r) => r.slug === slug)) notFound();
+function Card({ children, labelledBy, className }: { children: ReactNode; labelledBy: string; className?: string }) {
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-4 sm:py-6 lg:px-8 lg:py-8">
-      <Suspense fallback={<RegionSkeleton />}>
-        <RegionContent slug={slug} />
-      </Suspense>
-    </main>
-  );
-}
-
-function Card({ children, labelledBy }: { children: ReactNode; labelledBy: string }) {
-  return (
-    <section aria-labelledby={labelledBy} className="min-w-0 rounded-2xl border bg-card p-4 shadow-xs sm:p-6">
+    <section aria-labelledby={labelledBy} className={`min-w-0 rounded-2xl border bg-card p-4 shadow-xs sm:p-6 ${className ?? ""}`}>
       {children}
     </section>
   );
@@ -85,27 +54,35 @@ function CardTitle({ id, title, description }: { id: string; title: string; desc
   );
 }
 
-async function RegionContent({ slug }: { slug: string }) {
+/**
+ * Region page body for a province or a regency/city: summary tiles, map, weather, 7-day
+ * prediction, and monthly trend. Provinces also rank their regencies and cities.
+ */
+export async function RegionOverview({ slug }: { slug: string }) {
   const region = await getRegionDetail(slug);
   if (!region) notFound();
 
+  const isProvince = region.level === "provinsi";
+  const area = isProvince ? { provinsi: slug } : { kabupaten: slug };
   const status = await getDataStatus();
   const today = status.tanggal_data;
   const start30 = addDaysIso(today, -29);
   const endMonth = today.slice(0, 7);
   const targets = Array.from({ length: 7 }, (_, i) => addDaysIso(today, i + 1));
 
-  const [regions, weather, hotspots30, trend, ...dailyStats] = await Promise.all([
+  const [regions, weather, hotspots30, trend, regencyStats, ...dailyStats] = await Promise.all([
     getRegions(),
     getWeather(slug),
-    getHotspots({ start: start30, end: today, minConfidence: "low", bbox: region.bbox }),
+    getHotspots({ start: start30, end: today, minConfidence: "low", ...area }),
     getMonthlyTrend({ start: shiftMonth(endMonth, -23), end: endMonth, slug }),
-    ...targets.map((date) => getRegionStats({ date })),
+    isProvince
+      ? getRegionStats({ date: targets[0], start: start30, end: today, level: "kabupaten", provinsi: slug })
+      : Promise.resolve(null),
+    ...targets.map((date) => getRegionStats({ date, level: isProvince ? "provinsi" : "kabupaten" })),
   ]);
 
-  const ownHotspots = hotspots30.features.filter((f) => f.properties.kabupaten === slug);
   const days30 = Array.from({ length: 30 }, (_, i) => addDaysIso(start30, i));
-  const perDay = days30.map((day) => ownHotspots.filter((f) => f.properties.waktu_deteksi.startsWith(day)).length);
+  const perDay = days30.map((day) => hotspots30.features.filter((f) => f.properties.waktu_deteksi.startsWith(day)).length);
   const hotspotsToday = perDay[perDay.length - 1];
   const forecast = targets.map((date, i) => ({
     date,
@@ -115,6 +92,12 @@ async function RegionContent({ slug }: { slug: string }) {
   const tomorrowLevel = getRiskLevel(tomorrow.score);
   const peakDay = forecast.reduce((best, d) => (d.score > best.score ? d : best), forecast[0]);
   const name = regionDisplayName(region);
+  const kind = REGION_LEVEL_LABELS[region.level];
+
+  // Province pages switch between provinces; regency pages between regencies of the same province.
+  const switchOptions = regions
+    .filter((r) => (isProvince ? r.level === "provinsi" : r.provinsi === region.provinsi))
+    .map((r) => ({ slug: r.slug, nama: r.nama, href: regionHref(r) }));
 
   return (
     <>
@@ -122,27 +105,38 @@ async function RegionContent({ slug }: { slug: string }) {
         items={[
           { label: "Peta", href: "/" },
           { label: "Wilayah", href: "/wilayah" },
+          ...(region.provinsi && region.nama_provinsi
+            ? [{ label: region.nama_provinsi, href: regionHref({ slug: region.provinsi, provinsi: null }) }]
+            : []),
           { label: region.nama },
         ]}
       />
 
       <header className="-mt-2 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-ember-ink">{region.level === "kota" ? "Kota" : "Kabupaten"} · Provinsi Riau</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">{name}</h1>
+          <p className="text-sm font-medium text-ember-ink">
+            {isProvince
+              ? `Provinsi · ${formatInteger(region.jumlah_kabupaten)} kabupaten/kota`
+              : `${kind} · Provinsi ${region.nama_provinsi ?? ""}`}
+          </p>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-balance sm:text-4xl">{name}</h1>
           <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
             <RiskBadge level={tomorrowLevel} size="lg" prefix="Risiko besok:" />
             <p className="text-sm text-muted-foreground">Data sampai {formatDate(today)}</p>
           </div>
         </div>
-        <RegionSwitcher regions={regions} current={slug} />
+        <RegionSwitcher
+          options={switchOptions}
+          current={slug}
+          label={isProvince ? "Pindah ke provinsi lain" : `Pindah ke kabupaten/kota lain di ${region.nama_provinsi ?? "provinsi ini"}`}
+        />
       </header>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <StatTile
           label="Hotspot 30 hari"
           icon={Flame}
-          value={formatInteger(ownHotspots.length)}
+          value={formatInteger(hotspots30.features.length)}
           hint={
             <>
               <span className="font-medium text-foreground">{formatInteger(hotspotsToday)}</span> hari ini ·{" "}
@@ -184,6 +178,8 @@ async function RegionContent({ slug }: { slug: string }) {
           <RegionMapPanel
             slug={slug}
             name={region.nama}
+            kind={isProvince ? "provinsi" : "kabupaten"}
+            provinsi={region.provinsi ?? slug}
             bbox={region.bbox}
             hotspotStart={addDaysIso(today, -6)}
             hotspotEnd={today}
@@ -194,7 +190,11 @@ async function RegionContent({ slug }: { slug: string }) {
           <CardTitle
             id="cuaca"
             title="Cuaca terkini"
-            description={weather ? `${formatDayShort(weather.tanggal)} · Open-Meteo` : undefined}
+            description={
+              weather
+                ? `${formatDayShort(weather.tanggal)} · ${isProvince ? `rata-rata ${formatInteger(region.jumlah_kabupaten)} kabupaten/kota · ` : ""}Open-Meteo`
+                : undefined
+            }
           />
           {weather ? (
             <div className="flex flex-col gap-5">
@@ -235,7 +235,11 @@ async function RegionContent({ slug }: { slug: string }) {
 
       <div className="grid gap-3 lg:grid-cols-2">
         <Card labelledBy="prediksi">
-          <CardTitle id="prediksi" title="Prediksi risiko 7 hari" description="Rata-rata skor risiko seluruh kotak grid di wilayah ini." />
+          <CardTitle
+            id="prediksi"
+            title="Prediksi risiko 7 hari"
+            description="Rata-rata skor risiko seluruh kotak grid di wilayah ini."
+          />
           <RiskForecastChart days={forecast} />
           <PredictionNote className="mt-3" />
         </Card>
@@ -260,11 +264,28 @@ async function RegionContent({ slug }: { slug: string }) {
           )}
         </Card>
       </div>
+
+      {regencyStats ? (
+        <Card labelledBy="kabupaten-kota">
+          <CardTitle
+            id="kabupaten-kota"
+            title={`Kabupaten/kota di ${name}`}
+            description="Klik nama wilayah untuk membuka halaman detailnya."
+          />
+          <RegionRanking
+            stats={regencyStats}
+            highlight={null}
+            hotspotPeriod={`${formatDate(start30)} – ${formatDate(today)}`}
+            riskDateLabel={formatDayShort(tomorrow.date)}
+            filename={`siapi-peringkat-kabupaten-${slug}.csv`}
+          />
+        </Card>
+      ) : null}
     </>
   );
 }
 
-function RegionSkeleton() {
+export function RegionSkeleton() {
   return (
     <div role="status" aria-label="Memuat data wilayah" className="flex flex-col gap-6">
       <Skeleton className="h-8 w-48" />

@@ -35,6 +35,7 @@ import { MapSkeleton } from "./map-skeleton";
 import { MapStatus, type MapStatusItem } from "./map-status";
 import type { MapSelection, SelectedFeature } from "./selection";
 import { PREDICTION_DAYS, useMapFilters } from "./use-map-filters";
+import { snapBBox, useMapViewport } from "./use-map-viewport";
 
 const DashboardMap = dynamic(() => import("./dashboard-map"), {
   ssr: false,
@@ -52,8 +53,11 @@ const LAYERS: LayerOption[] = [
 /** Time each prediction day stays on screen while the timeline plays. */
 const PLAY_STEP_MS = 1100;
 
-function riskUrl(targetDate: string) {
-  return `/api/risk?target_date=${targetDate}`;
+/** The 5 km grid is only drawn from this zoom on; further out the regions' averages are shown. */
+const GRID_MIN_ZOOM = 9;
+
+function riskUrl(targetDate: string, bbox: string) {
+  return `/api/risk?target_date=${targetDate}&bbox=${bbox}`;
 }
 
 function countBy<T>(items: T[], key: (item: T) => string): Map<string, number> {
@@ -67,6 +71,8 @@ export function MapDashboard({ status }: { status: DataStatus }) {
   const desktop = useIsDesktop();
   const wide = useMediaQuery("(min-width: 1280px)");
   const [map, setMap] = useState<L.Map | null>(null);
+  const viewport = useMapViewport(map);
+  const gridBBox = viewport && viewport.zoom >= GRID_MIN_ZOOM ? snapBBox(viewport.bbox, 0.5).join(",") : null;
   const [selection, setSelection] = useState<MapSelection | null>(null);
   const [riskOpacity, setRiskOpacity] = useState(0.7);
   const [panelOpen, setPanelOpen] = useState(true);
@@ -86,9 +92,9 @@ export function MapDashboard({ status }: { status: DataStatus }) {
 
   const hotspots = useJson<HotspotCollection>(`/api/hotspots?start=${start}&end=${end}&min_confidence=${filters.conf}`);
   const clusters = useJson<ClusterCollection>(`/api/clusters?date=${end}`);
-  const risk = useJson<RiskCellCollection>(riskUrl(targetDate));
+  const risk = useJson<RiskCellCollection>(gridBBox ? riskUrl(targetDate, gridBBox) : null);
   const regionStats = useJson<RegionStat[]>(`/api/stats/regions?date=${targetDate}`);
-  const regions = useJson<RegionBoundaryCollection>("/api/regions");
+  const regions = useJson<RegionBoundaryCollection>("/api/regions?level=provinsi");
   const weather = useJson<RegionWeather[]>("/api/weather");
 
   // While playing, step to the next day once the current one has loaded and been shown.
@@ -105,7 +111,9 @@ export function MapDashboard({ status }: { status: DataStatus }) {
   const setPlaying = (next: boolean) => {
     if (next) {
       // Load every prediction day up front so playback does not stall between days.
-      for (const day of PREDICTION_DAYS) prefetchJson(riskUrl(addDaysIso(status.tanggal_data, day))).catch(() => {});
+      if (gridBBox) {
+        for (const day of PREDICTION_DAYS) prefetchJson(riskUrl(addDaysIso(status.tanggal_data, day), gridBBox)).catch(() => {});
+      }
       if (filters.prediksi >= PREDICTION_DAYS.length) setFilters({ prediksi: 1 });
     }
     setPlayRequested(next);
@@ -181,7 +189,7 @@ export function MapDashboard({ status }: { status: DataStatus }) {
       value: avgDryDays,
       format: (v) => formatDecimal(v, 1),
       unit: "hari",
-      hint: "Rata-rata 12 wilayah",
+      hint: weather.data ? `Rata-rata ${formatInteger(weather.data.length)} kabupaten/kota` : undefined,
     },
   ];
 
@@ -260,11 +268,11 @@ export function MapDashboard({ status }: { status: DataStatus }) {
       className="relative isolate h-[calc(100dvh-var(--header-h))] overflow-hidden"
       style={{ ["--map-bottom-inset" as string]: riskOn ? "128px" : "0px" }}
     >
-      <h1 className="sr-only">Peta pemantauan dan prediksi karhutla Riau</h1>
+      <h1 className="sr-only">Peta pemantauan dan prediksi karhutla Indonesia</h1>
 
       <div className="map-frame absolute inset-0">
         <DashboardMap
-          label="Peta hotspot dan prediksi risiko karhutla Provinsi Riau"
+          label="Peta hotspot dan prediksi risiko karhutla Indonesia"
           layers={filters.lapisan}
           hotspots={hotspots.data}
           clusters={clusters.data}

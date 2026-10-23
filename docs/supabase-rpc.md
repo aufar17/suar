@@ -4,6 +4,9 @@ Dokumen ini menjelaskan objek database yang dibaca `lib/data/supabase.ts` saat `
 (`siapi-pipeline`) bertanggung jawab membuat tabel, view, dan fungsi di bawah ini. Frontend hanya **membaca** data
 dengan anon key, jadi semua objek harus bisa dibaca role `anon` (aktifkan RLS dengan policy `select` saja).
 
+Cakupan data adalah **seluruh Indonesia**: 34 provinsi dan 514 kabupaten/kota (batas dari geoBoundaries, lihat
+`pnpm geo:build` dan `README.md`). Data hotspot NASA FIRMS diambil untuk semua wilayah.
+
 Semua respons divalidasi dengan skema zod di `types/index.ts`, skema yang sama dengan data mock. Kalau bentuknya
 berbeda, frontend melempar error `Respons … tidak sesuai skema` dan route handler membalas HTTP 500.
 
@@ -11,14 +14,17 @@ berbeda, frontend melempar error `Respons … tidak sesuai skema` dan route hand
 
 | Hal | Aturan |
 | --- | --- |
-| Koordinat | EPSG:4326, urutan `[longitude, latitude]`, dibulatkan 4 desimal (`ST_AsGeoJSON(geom, 4)`). |
+| Koordinat | EPSG:4326, urutan `[longitude, latitude]`, dibulatkan 4–5 desimal (`ST_AsGeoJSON(geom, 5)`). |
 | GeoJSON | Fungsi spasial mengembalikan **satu** nilai `jsonb` berupa `FeatureCollection`. Koleksi kosong tetap `{"type":"FeatureCollection","features":[]}`, bukan `null`. |
 | Tanggal | `date` dikirim sebagai string `YYYY-MM-DD`. Bulan sebagai `YYYY-MM`. |
-| Waktu | Datetime dikirim sebagai string ISO dengan offset WIB, contoh `2026-10-20T13:24:00+07:00`. UI menampilkan jam apa adanya dengan label "WIB", jadi **jangan** kirim UTC (`Z`/`+00:00`). Gunakan `to_char(ts AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD"T"HH24:MI:SS"+07:00"')`. |
+| Waktu | Datetime dikirim sebagai string ISO dengan offset WIB, contoh `2026-10-20T13:24:00+07:00`, **untuk seluruh Indonesia** (termasuk wilayah WITA/WIT). UI menampilkan jam apa adanya dengan label "WIB", jadi **jangan** kirim UTC (`Z`/`+00:00`). Gunakan `to_char(ts AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD"T"HH24:MI:SS"+07:00"')`. Tanggal hotspot = tanggal WIB. |
 | Angka | Pakai `double precision`/`integer`, bukan `numeric`, supaya PostgREST mengirim angka JSON. |
 | Nama field | Sama persis dengan `types/index.ts` (snake_case Bahasa Indonesia). |
-| Wilayah | `kabupaten` selalu berisi **slug**, misalnya `indragiri-hilir`. |
-| Bbox | Parameter `min_lon, min_lat, max_lon, max_lat` boleh `null` semua (artinya tanpa filter). Filter memakai `geom && ST_MakeEnvelope(min_lon, min_lat, max_lon, max_lat, 4326)`. |
+| Wilayah | `provinsi` dan `kabupaten` selalu berisi **slug**, misalnya `riau` dan `indragiri-hilir`. Slug unik secara nasional: kota diberi awalan `kota-` (`kota-pekanbaru`), kabupaten yang namanya sama dengan provinsi diberi awalan `kabupaten-` (`kabupaten-gorontalo`). Gunakan slug dari `mock/provinsi.geojson` dan `mock/kabupaten.geojson`. |
+| Filter area | Fungsi spasial menerima `min_lon, min_lat, max_lon, max_lat` (boleh `null` semua = tanpa filter bbox, filter `geom && ST_MakeEnvelope(…, 4326)`), `provinsi_slug` dan `kabupaten_slug` (boleh `null`). Semua filter yang terisi digabung dengan AND. |
+
+Setiap hotspot, zona, dan kotak grid **wajib** membawa `provinsi` dan `kabupaten` (slug), diisi pipeline dengan
+`ST_Intersects`/`ST_Contains` terhadap batas kabupaten/kota.
 
 ## Fungsi RPC
 
@@ -32,12 +38,14 @@ get_hotspots(
   end_date date,            -- inklusif, rentang maksimal 31 hari (divalidasi di frontend)
   min_confidence text,      -- 'low' | 'nominal' | 'high'; urutan low < nominal < high
   min_lon double precision, min_lat double precision,
-  max_lon double precision, max_lat double precision
+  max_lon double precision, max_lat double precision,
+  provinsi_slug text,
+  kabupaten_slug text
 ) returns jsonb             -- FeatureCollection<Point, HotspotProps>
 ```
 
 `properties`: `id`, `waktu_deteksi`, `satelit` (`VIIRS_SNPP` | `VIIRS_NOAA20` | `MODIS`), `confidence`
-(`low` | `nominal` | `high`), `frp` (MW), `kabupaten` (slug).
+(`low` | `nominal` | `high`), `frp` (MW), `provinsi`, `kabupaten`.
 
 Contoh implementasi:
 
@@ -45,7 +53,8 @@ Contoh implementasi:
 create or replace function get_hotspots(
   start_date date, end_date date, min_confidence text,
   min_lon double precision default null, min_lat double precision default null,
-  max_lon double precision default null, max_lat double precision default null
+  max_lon double precision default null, max_lat double precision default null,
+  provinsi_slug text default null, kabupaten_slug text default null
 ) returns jsonb language sql stable as $$
   select jsonb_build_object(
     'type', 'FeatureCollection',
@@ -58,6 +67,7 @@ create or replace function get_hotspots(
         'satelit', h.satelit,
         'confidence', h.confidence,
         'frp', h.frp,
+        'provinsi', h.provinsi,
         'kabupaten', h.kabupaten
       )
     ) order by h.waktu_deteksi), '[]'::jsonb)
@@ -66,18 +76,34 @@ create or replace function get_hotspots(
   where (h.waktu_deteksi at time zone 'Asia/Jakarta')::date between start_date and end_date
     and array_position(array['low','nominal','high'], h.confidence)
         >= array_position(array['low','nominal','high'], min_confidence)
-    and (min_lon is null or h.geom && ST_MakeEnvelope(min_lon, min_lat, max_lon, max_lat, 4326));
+    and (min_lon is null or h.geom && ST_MakeEnvelope(min_lon, min_lat, max_lon, max_lat, 4326))
+    and (provinsi_slug is null or h.provinsi = provinsi_slug)
+    and (kabupaten_slug is null or h.kabupaten = kabupaten_slug);
 $$;
 ```
+
+Satu hari puncak musim kebakaran bisa berisi beberapa ribu hotspot nasional, jadi buat indeks pada
+`(waktu_deteksi)`, `geom` (GiST), `provinsi`, dan `kabupaten`.
+
+**Kelompok hotspot** (`GET /api/hotspots/groups`, angka cluster di zoom jauh) dihitung di server frontend dengan
+supercluster dari hasil `get_hotspots` **tanpa** bbox untuk rentang dan tingkat kepercayaan yang sama, jadi tidak
+butuh fungsi database tersendiri.
 
 ### `get_clusters`
 
 ```sql
-get_clusters(target_date date) returns jsonb  -- FeatureCollection<Polygon, ClusterProps>
+get_clusters(
+  target_date date,
+  min_lon double precision, min_lat double precision,
+  max_lon double precision, max_lat double precision,
+  provinsi_slug text,
+  kabupaten_slug text
+) returns jsonb  -- FeatureCollection<Polygon, ClusterProps>
 ```
 
 `properties`: `id`, `tanggal`, `jumlah_hotspot`, `luas_km2`, `status` (`baru` | `meluas` | `stabil` | `menyusut`),
-`aktif_sejak`, `kabupaten`. Hanya zona hasil DBSCAN untuk `target_date`.
+`aktif_sejak`, `provinsi`, `kabupaten` (wilayah dengan hotspot terbanyak di zona itu). Hanya zona hasil DBSCAN untuk
+`target_date`. Dengan bbox, zona yang **bersinggungan** dengan bbox ikut dikembalikan.
 
 ### `get_risk_cells`
 
@@ -85,23 +111,49 @@ get_clusters(target_date date) returns jsonb  -- FeatureCollection<Polygon, Clus
 get_risk_cells(
   target_date date,
   min_lon double precision, min_lat double precision,
-  max_lon double precision, max_lat double precision
+  max_lon double precision, max_lat double precision,
+  provinsi_slug text,
+  kabupaten_slug text
 ) returns jsonb  -- FeatureCollection<Polygon, RiskCellProps>
 ```
 
 Satu feature per kotak grid 5×5 km dari prediksi **terbaru** yang menargetkan `target_date`. `properties`: `cell_id`,
 `tanggal_prediksi`, `tanggal_target`, `skor_risiko` (0–1), `level_risiko` (`rendah` < 0,25 ≤ `sedang` < 0,5 ≤
 `tinggi` < 0,75 ≤ `sangat_tinggi`), `is_gambut`, `faktor` (array 3 objek `{ fitur, label, kontribusi }`, diurutkan
-dari nilai SHAP absolut terbesar), `kabupaten`. Dengan bbox, kotak yang **bersinggungan** dengan bbox ikut dikembalikan.
+dari nilai SHAP absolut terbesar), `provinsi`, `kabupaten`. Dengan bbox, kotak yang **bersinggungan** dengan bbox ikut
+dikembalikan.
+
+Grid nasional berisi ±76.000 kotak, jadi frontend **selalu** mengirim salah satu filter: bbox (maksimal 25 derajat
+persegi, dipakai peta saat zoom ≥ 9), `provinsi_slug`, atau `kabupaten_slug` (peta halaman kabupaten). Pada zoom
+lebih jauh peta memakai rata-rata per wilayah dari `get_region_stats`.
 
 ### `get_region_boundaries`
 
 ```sql
-get_region_boundaries() returns jsonb  -- FeatureCollection<Polygon | MultiPolygon, Region>
+get_region_boundaries(boundary_level text, provinsi_slug text) returns jsonb
+-- FeatureCollection<Polygon | MultiPolygon, RegionBoundaryProps>
 ```
 
-Batas 12 kabupaten/kota. `properties`: `id` (kode BPS), `slug`, `nama`, `level` (`kabupaten` | `kota`). Sederhanakan
-geometri (`ST_SimplifyPreserveTopology(geom, 0.002)`) supaya respons tetap kecil.
+- `boundary_level = 'provinsi'`: 34 provinsi. `provinsi_slug` diabaikan.
+- `boundary_level = 'kabupaten'`: kabupaten **dan** kota; dengan `provinsi_slug`, hanya yang berada di provinsi itu.
+
+`properties`: `id` (kode BPS provinsi, atau kode kabupaten/kota), `slug`, `nama` (tanpa awalan "Kota"/"Kabupaten"),
+`level` (`provinsi` | `kabupaten` | `kota`), `provinsi` (slug provinsi induk; `null` untuk provinsi), `label`
+(`[lon, lat]` titik di dalam poligon untuk label, `ST_PointOnSurface`), `bbox` (`[minLon, minLat, maxLon, maxLat]`).
+
+Geometri harus ringan untuk browser dan bebas celah/tumpang tindih: provinsi < 400 KB, semua kabupaten/kota < 2,5 MB
+(lihat hasil `pnpm geo:build` sebagai acuan, atau `ST_SimplifyPreserveTopology` pada topologi bersama). Disarankan
+menyimpan geometri hasil penyederhanaan di kolom terpisah daripada menyederhanakan di setiap permintaan.
+
+### `get_province_lines`
+
+```sql
+get_province_lines() returns jsonb  -- FeatureCollection<MultiLineString, {}>
+```
+
+Garis batas antarprovinsi yang diambil dari topologi kabupaten/kota (garis yang memisahkan dua kabupaten dari provinsi
+berbeda), supaya saat zoom dekat garis provinsi berimpit tepat dengan garis kabupaten. Satu feature `MultiLineString`
+cukup; `properties` boleh `{}`.
 
 ### `get_region_detail`
 
@@ -111,17 +163,20 @@ get_region_detail(region_slug text) returns jsonb  -- RegionDetail atau null
 
 ```json
 {
-  "id": "1404", "slug": "pelalawan", "nama": "Pelalawan", "level": "kabupaten",
-  "bbox": [101.3, -0.4, 103.1, 0.8],
-  "pusat": [102.2, 0.2],
-  "luas_km2": 12758,
-  "persen_gambut": 52.4,
-  "jumlah_sel": 520
+  "id": "14", "slug": "riau", "nama": "Riau", "level": "provinsi", "provinsi": null, "nama_provinsi": null,
+  "bbox": [100.03, -1.12, 103.82, 2.92],
+  "pusat": [101.8, 0.5],
+  "luas_km2": 89150,
+  "persen_gambut": 41.2,
+  "jumlah_sel": 3550,
+  "jumlah_kabupaten": 12
 }
 ```
 
-`bbox` = `[minLon, minLat, maxLon, maxLat]`, `pusat` = titik di dalam wilayah (`ST_PointOnSurface`), `persen_gambut`
-0–100 dari kotak grid bergambut. Kembalikan `null` jika slug tidak ada (frontend lalu menampilkan 404).
+Berlaku untuk provinsi maupun kabupaten/kota. `bbox` = `[minLon, minLat, maxLon, maxLat]`, `pusat` = titik di dalam
+wilayah (`ST_PointOnSurface`), `persen_gambut` 0–100 dari kotak grid bergambut, `jumlah_sel` = kotak grid di wilayah
+itu, `jumlah_kabupaten` = jumlah kabupaten/kota di provinsi (0 untuk kabupaten/kota), `nama_provinsi` = nama provinsi
+induk (`null` untuk provinsi). Kembalikan `null` jika slug tidak ada (frontend lalu menampilkan 404).
 
 ### `get_monthly_trend`
 
@@ -131,19 +186,36 @@ get_monthly_trend(start_month text, end_month text, region_slug text) returns js
 ```
 
 Satu elemen untuk **setiap** bulan dari `start_month` sampai `end_month` (inklusif, urut naik), termasuk bulan tanpa
-hotspot (`0`). `region_slug = null` berarti seluruh provinsi. Gunakan `generate_series` lalu `left join`.
+hotspot (`0`). `region_slug` boleh slug provinsi atau kabupaten/kota; `null` berarti seluruh Indonesia. Gunakan
+`generate_series` lalu `left join`.
 
 ### `get_region_stats`
 
 ```sql
-get_region_stats(target_date date, start_date date, end_date date) returns jsonb
--- [{ "slug": "pelalawan", "nama": "Pelalawan", "jumlah_hotspot": 537, "rata_skor_risiko": 0.41 }, ...]
+get_region_stats(
+  target_date date,
+  start_date date,
+  end_date date,
+  boundary_level text,      -- 'provinsi' | 'kabupaten'
+  provinsi_slug text,       -- hanya untuk boundary_level = 'kabupaten'; null = semua
+  min_confidence text       -- 'low' | 'nominal' | 'high', hotspot yang dihitung
+) returns jsonb
+-- [{ "slug": "pelalawan", "nama": "Pelalawan", "level": "kabupaten", "provinsi": "riau",
+--    "jumlah_hotspot": 537, "rata_skor_risiko": 0.41, "maks_skor_risiko": 0.93, "jumlah_sel": 520 }, ...]
 ```
 
-Satu elemen per kabupaten/kota. `rata_skor_risiko` = rata-rata `skor_risiko` semua kotak wilayah itu untuk
-`target_date` (0 jika belum ada prediksi). `jumlah_hotspot` = jumlah hotspot dari `start_date` sampai `end_date`;
-jika keduanya `null`, pakai 30 hari terakhir sampai tanggal data terbaru. Urutkan menurun berdasarkan
-`rata_skor_risiko`.
+Ringkasan agregat untuk choropleth, peringkat, dan kartu ringkasan. Satu elemen per provinsi (34) atau per
+kabupaten/kota (514, atau yang ada di `provinsi_slug`), **termasuk** wilayah tanpa hotspot atau tanpa prediksi.
+
+- `jumlah_hotspot` = hotspot dari `start_date` sampai `end_date` dengan kepercayaan ≥ `min_confidence`; jika
+  tanggalnya `null`, pakai 30 hari terakhir sampai tanggal data terbaru.
+- `rata_skor_risiko` dan `maks_skor_risiko` = rata-rata dan maksimum `skor_risiko` semua kotak wilayah itu untuk
+  `target_date` (0 jika belum ada prediksi). `jumlah_sel` = jumlah kotak yang punya prediksi (dipakai sebagai bobot
+  rata-rata nasional).
+- Urutkan menurun berdasarkan `rata_skor_risiko`.
+
+Karena dipanggil untuk setiap hari prediksi dan setiap perubahan filter, sebaiknya dihitung dari tabel ringkasan
+harian per kabupaten (materialized view) dan dijumlahkan ke provinsi.
 
 ## Tabel dan view
 
@@ -151,8 +223,8 @@ Dibaca langsung dengan `supabase.from(...)`.
 
 | Objek | Kolom yang dibaca | Catatan |
 | --- | --- | --- |
-| `regions` (tabel) | `id`, `slug`, `nama`, `level` | Frontend memfilter `level in ('kabupaten','kota')` dan mengurutkan berdasarkan `nama`. |
-| `weather_latest` (view) | `slug`, `tanggal`, `suhu_c`, `kelembapan_persen`, `curah_hujan_mm`, `kecepatan_angin_kmh`, `hari_tanpa_hujan` | Satu baris per kabupaten: snapshot cuaca terbaru. |
+| `regions` (tabel) | `id`, `slug`, `nama`, `level`, `provinsi` | Semua provinsi, kabupaten, dan kota. `provinsi` = slug induk (`null` untuk provinsi). Frontend mengurutkan berdasarkan `nama`. |
+| `weather_latest` (view) | `slug`, `nama`, `level`, `provinsi`, `tanggal`, `suhu_c`, `kelembapan_persen`, `curah_hujan_mm`, `kecepatan_angin_kmh`, `hari_tanpa_hujan` | Satu baris per kabupaten/kota (snapshot cuaca terbaru) **ditambah** satu baris per provinsi berisi rata-rata kabupaten/kotanya (`hari_tanpa_hujan` dibulatkan ke bilangan bulat). Daftar cuaca memfilter `level <> 'provinsi'`. |
 | `data_status` (view) | `terakhir_diperbarui`, `tanggal_data`, `prediksi_mulai`, `prediksi_sampai` | Tepat satu baris. `terakhir_diperbarui` = waktu pipeline terakhir selesai (format WIB seperti di atas); `tanggal_data` = tanggal hotspot/cuaca terbaru; `prediksi_mulai`/`prediksi_sampai` = rentang `tanggal_target` prediksi terbaru. Frontend menambahkan `sumber: "supabase"`. |
 
 ## Hak akses
@@ -161,7 +233,7 @@ Dibaca langsung dengan `supabase.from(...)`.
 grant usage on schema public to anon;
 grant select on regions, weather_latest, data_status to anon;
 grant execute on function get_hotspots, get_clusters, get_risk_cells, get_region_boundaries,
-  get_region_detail, get_monthly_trend, get_region_stats to anon;
+  get_province_lines, get_region_detail, get_monthly_trend, get_region_stats to anon;
 ```
 
 Fungsi sebaiknya `stable` dan `security invoker`, supaya RLS pada tabel sumber tetap berlaku.

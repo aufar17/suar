@@ -2,8 +2,9 @@ import "server-only";
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { addDaysIso } from "@/lib/format";
-import { bboxIntersects, pointInBBox, ringAreaKm2, ringBBox, ringCentroid } from "@/lib/geo";
+import { addDaysIso, diffDaysIso } from "@/lib/format";
+import { bboxIntersects, pointInBBox, ringAreaKm2 } from "@/lib/geo";
+import { topRiskFactors } from "@/lib/mock-model";
 import { getRiskLevel } from "@/lib/risk";
 import {
   CONFIDENCE_RANK,
@@ -14,20 +15,25 @@ import {
   type MonthlyTrend,
   type Position,
   type Region,
+  type RegionBoundaryFeature,
   type RegionDetail,
+  type RegionStat,
+  type RegionWeather,
   type RiskCellFeature,
   type Satellite,
+  type WeatherSnapshot,
 } from "@/types";
 import type {
   MockClusters,
   MockGrid,
   MockHotspots,
+  MockProvinceLines,
   MockRegions,
   MockRisk,
   MockStatus,
   MockWeather,
 } from "@/types/mock";
-import type { DataSource } from "./types";
+import type { AreaFilter, DataSource } from "./types";
 
 const MOCK_DIR = path.join(process.cwd(), "mock");
 
@@ -49,109 +55,285 @@ function memo<T>(load: () => Promise<T>): () => Promise<T> {
 }
 
 const loadStatus = memo(() => readJson<MockStatus>("status.json"));
-const loadRegions = memo(() => readJson<MockRegions>("regions.geojson"));
 const loadClusters = memo(() => readJson<MockClusters>("clusters.geojson"));
 const loadWeather = memo(() => readJson<MockWeather>("weather.json"));
 const loadRisk = memo(() => readJson<MockRisk>("risk.json"));
+const loadProvinceLines = memo(() => readJson<MockProvinceLines>("provinsi-garis.geojson"));
 
-interface GridCell {
-  id: string;
-  kabupaten: string;
-  isGambut: boolean;
-  ring: Position[];
-  bbox: BBox;
+// ---------------------------------------------------------------------------
+// Regions
+
+interface RegionIndex {
+  provinces: MockRegions;
+  regencies: MockRegions;
+  list: Region[];
+  bySlug: Map<string, RegionBoundaryFeature>;
+  /** Regency slugs per province slug. */
+  children: Map<string, string[]>;
 }
 
-const loadGrid = memo(async () => {
+const loadRegions = memo(async (): Promise<RegionIndex> => {
+  const [provinces, regencies] = await Promise.all([
+    readJson<MockRegions>("provinsi.geojson"),
+    readJson<MockRegions>("kabupaten.geojson"),
+  ]);
+  const features = [...provinces.features, ...regencies.features];
+  const children = new Map<string, string[]>();
+  for (const f of regencies.features) {
+    const parent = f.properties.provinsi ?? "";
+    children.set(parent, [...(children.get(parent) ?? []), f.properties.slug]);
+  }
+  return {
+    provinces,
+    regencies,
+    list: features
+      .map(({ properties: p }): Region => ({ id: p.id, slug: p.slug, nama: p.nama, level: p.level, provinsi: p.provinsi }))
+      .sort((a, b) => a.nama.localeCompare(b.nama, "id")),
+    bySlug: new Map(features.map((f) => [f.properties.slug, f])),
+    children,
+  };
+});
+
+function inArea(filter: AreaFilter, provinsi: string, kabupaten: string): boolean {
+  return (!filter.provinsi || filter.provinsi === provinsi) && (!filter.kabupaten || filter.kabupaten === kabupaten);
+}
+
+// ---------------------------------------------------------------------------
+// Grid
+
+const GRID_BUCKET = 1; // degrees
+
+interface GridIndex {
+  cellSize: number;
+  ids: string[];
+  /** South-west corner of each cell. */
+  lon: Float64Array;
+  lat: Float64Array;
+  kab: Int32Array;
+  gambut: Uint8Array;
+  ndvi: Float64Array;
+  hotspots: Int32Array;
+  kabSlugs: string[];
+  kabProvinces: string[];
+  /** Cell indices per regency slug and per province slug. */
+  byKab: Map<string, number[]>;
+  byProv: Map<string, number[]>;
+  /** Cell indices per 1° bucket, for bbox queries. */
+  buckets: Map<string, number[]>;
+}
+
+const loadGrid = memo(async (): Promise<GridIndex> => {
   const grid = await readJson<MockGrid>("grid.json");
+  const n = grid.cells.length;
   const [lon0, lat0] = grid.origin;
   const size = grid.cell_size;
-  const r4 = (v: number) => Math.round(v * 1e4) / 1e4;
-  return grid.cells.map(([row, col, kab, gambut]): GridCell => {
-    const minLon = r4(lon0 + col * size);
-    const minLat = r4(lat0 + row * size);
-    const maxLon = r4(lon0 + (col + 1) * size);
-    const maxLat = r4(lat0 + (row + 1) * size);
-    return {
-      id: `R${String(row).padStart(3, "0")}-C${String(col).padStart(3, "0")}`,
-      kabupaten: grid.kabupaten[kab],
-      isGambut: gambut === 1,
-      ring: [
-        [minLon, minLat],
-        [maxLon, minLat],
-        [maxLon, maxLat],
-        [minLon, maxLat],
-        [minLon, minLat],
-      ],
-      bbox: [minLon, minLat, maxLon, maxLat],
+  const index: GridIndex = {
+    cellSize: size,
+    ids: new Array<string>(n),
+    lon: new Float64Array(n),
+    lat: new Float64Array(n),
+    kab: new Int32Array(n),
+    gambut: new Uint8Array(n),
+    ndvi: new Float64Array(n),
+    hotspots: new Int32Array(n),
+    kabSlugs: grid.kabupaten,
+    kabProvinces: grid.provinsi,
+    byKab: new Map(),
+    byProv: new Map(),
+    buckets: new Map(),
+  };
+  grid.cells.forEach(([row, col, kab, gambut, ndvi, hotspots], i) => {
+    const lon = Math.round((lon0 + col * size) * 1e4) / 1e4;
+    const lat = Math.round((lat0 + row * size) * 1e4) / 1e4;
+    index.ids[i] = `R${String(row).padStart(3, "0")}-C${String(col).padStart(4, "0")}`;
+    index.lon[i] = lon;
+    index.lat[i] = lat;
+    index.kab[i] = kab;
+    index.gambut[i] = gambut;
+    index.ndvi[i] = ndvi / 100;
+    index.hotspots[i] = hotspots;
+    const push = (map: Map<string, number[]>, key: string) => {
+      const list = map.get(key);
+      if (list) list.push(i);
+      else map.set(key, [i]);
     };
+    push(index.byKab, grid.kabupaten[kab]);
+    push(index.byProv, grid.provinsi[kab]);
+    push(index.buckets, `${Math.floor(lon / GRID_BUCKET)}:${Math.floor(lat / GRID_BUCKET)}`);
   });
+  return index;
 });
 
-interface HotspotIndex {
-  byDate: Map<string, HotspotFeature[]>;
-  monthly: Map<string, number>; // "YYYY-MM" and "slug|YYYY-MM"
+function cellBBox(grid: GridIndex, i: number): BBox {
+  const r4 = (v: number) => Math.round(v * 1e4) / 1e4;
+  return [grid.lon[i], grid.lat[i], r4(grid.lon[i] + grid.cellSize), r4(grid.lat[i] + grid.cellSize)];
 }
 
-const loadHotspots = memo(async (): Promise<HotspotIndex> => {
-  const file = await readJson<MockHotspots>("hotspots.json");
-  const byDate = new Map<string, HotspotFeature[]>();
-  const monthly = new Map<string, number>();
-  for (const [lon, lat, time, sat, conf, frp, kab] of file.rows) {
-    const date = time.slice(0, 10);
-    const list = byDate.get(date) ?? [];
-    const kabupaten = file.kabupaten[kab];
-    list.push({
-      type: "Feature",
-      geometry: { type: "Point", coordinates: [lon, lat] },
-      properties: {
-        id: `HS-${date.replaceAll("-", "")}-${String(list.length + 1).padStart(4, "0")}`,
-        waktu_deteksi: `${time}:00+07:00`,
-        satelit: file.satelit[sat] as Satellite,
-        confidence: file.confidence[conf] as Confidence,
-        frp,
-        kabupaten,
-      },
-    });
-    byDate.set(date, list);
-    const month = date.slice(0, 7);
-    monthly.set(month, (monthly.get(month) ?? 0) + 1);
-    monthly.set(`${kabupaten}|${month}`, (monthly.get(`${kabupaten}|${month}`) ?? 0) + 1);
+function cellsInArea(grid: GridIndex, filter: AreaFilter): number[] {
+  let candidates: number[];
+  if (filter.kabupaten) candidates = grid.byKab.get(filter.kabupaten) ?? [];
+  else if (filter.provinsi) candidates = grid.byProv.get(filter.provinsi) ?? [];
+  else if (filter.bbox) {
+    const [x0, y0, x1, y1] = filter.bbox;
+    candidates = [];
+    for (let bx = Math.floor((x0 - grid.cellSize) / GRID_BUCKET); bx <= Math.floor(x1 / GRID_BUCKET); bx++) {
+      for (let by = Math.floor((y0 - grid.cellSize) / GRID_BUCKET); by <= Math.floor(y1 / GRID_BUCKET); by++) {
+        candidates.push(...(grid.buckets.get(`${bx}:${by}`) ?? []));
+      }
+    }
+  } else candidates = grid.ids.map((_, i) => i);
+  return candidates.filter(
+    (i) =>
+      inArea(filter, grid.kabProvinces[grid.kab[i]], grid.kabSlugs[grid.kab[i]]) &&
+      (!filter.bbox || bboxIntersects(cellBBox(grid, i), filter.bbox)),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Risk
+
+interface RiskAggregate {
+  sum: Float64Array;
+  count: Int32Array;
+  max: Float64Array;
+}
+
+interface RiskDay {
+  target: number;
+  /** Per regency index (grid order) and per province slug. */
+  kab: RiskAggregate;
+  prov: Map<string, { sum: number; count: number; max: number }>;
+}
+
+const riskDayCache = new Map<string, RiskDay | null>();
+
+async function riskDay(targetDate: string): Promise<RiskDay | null> {
+  if (riskDayCache.has(targetDate)) return riskDayCache.get(targetDate)!;
+  const [risk, grid] = await Promise.all([loadRisk(), loadGrid()]);
+  const t = risk.targets.indexOf(targetDate);
+  if (t < 0) {
+    riskDayCache.set(targetDate, null);
+    return null;
   }
-  return { byDate, monthly };
-});
+  const nKab = grid.kabSlugs.length;
+  const kab: RiskAggregate = { sum: new Float64Array(nKab), count: new Int32Array(nKab), max: new Float64Array(nKab) };
+  const scores = risk.scores[t];
+  for (let i = 0; i < scores.length; i++) {
+    const k = grid.kab[i];
+    const score = scores[i] / 1000;
+    kab.sum[k] += score;
+    kab.count[k] += 1;
+    if (score > kab.max[k]) kab.max[k] = score;
+  }
+  const prov = new Map<string, { sum: number; count: number; max: number }>();
+  for (let k = 0; k < nKab; k++) {
+    const key = grid.kabProvinces[k];
+    const entry = prov.get(key) ?? { sum: 0, count: 0, max: 0 };
+    entry.sum += kab.sum[k];
+    entry.count += kab.count[k];
+    entry.max = Math.max(entry.max, kab.max[k]);
+    prov.set(key, entry);
+  }
+  const day = { target: t, kab, prov };
+  riskDayCache.set(targetDate, day);
+  return day;
+}
 
-const riskFeatureCache = new Map<string, RiskCellFeature[]>();
-
-async function riskFeatures(targetDate: string): Promise<RiskCellFeature[]> {
-  const cached = riskFeatureCache.get(targetDate);
-  if (cached) return cached;
+async function riskFeatures(targetDate: string, indices: number[]): Promise<RiskCellFeature[]> {
   const [risk, grid] = await Promise.all([loadRisk(), loadGrid()]);
   const t = risk.targets.indexOf(targetDate);
   if (t < 0) return [];
-  const features = grid.map((cell, i): RiskCellFeature => {
-    const score = risk.scores[t][i];
+  return indices.map((i): RiskCellFeature => {
+    const score = risk.scores[t][i] / 1000;
+    const k = grid.kab[i];
+    const [dry, humidity] = risk.cuaca[t][k];
+    const [minLon, minLat, maxLon, maxLat] = cellBBox(grid, i);
     return {
       type: "Feature",
-      geometry: { type: "Polygon", coordinates: [cell.ring] },
+      geometry: {
+        type: "Polygon",
+        coordinates: [
+          [
+            [minLon, minLat],
+            [maxLon, minLat],
+            [maxLon, maxLat],
+            [minLon, maxLat],
+            [minLon, minLat],
+          ],
+        ],
+      },
       properties: {
-        cell_id: cell.id,
+        cell_id: grid.ids[i],
         tanggal_prediksi: risk.tanggal_prediksi,
         tanggal_target: targetDate,
         skor_risiko: score,
         level_risiko: getRiskLevel(score),
-        is_gambut: cell.isGambut,
-        faktor: risk.factors[t][i].map(([f, kontribusi, label]) => ({
-          fitur: risk.fitur[f],
-          label,
-          kontribusi,
-        })),
-        kabupaten: cell.kabupaten,
+        is_gambut: grid.gambut[i] === 1,
+        faktor: topRiskFactors({
+          dry,
+          humidity,
+          gambut: grid.gambut[i] === 1,
+          hotspots: grid.hotspots[i],
+          ndvi: grid.ndvi[i],
+          dayOffset: t,
+        }),
+        provinsi: grid.kabProvinces[k],
+        kabupaten: grid.kabSlugs[k],
       },
     };
   });
-  riskFeatureCache.set(targetDate, features);
-  return features;
+}
+
+// ---------------------------------------------------------------------------
+// Hotspots
+
+type HotspotRow = MockHotspots["days"][number][number];
+
+interface HotspotIndex {
+  file: MockHotspots;
+  /** Day index → hotspot count per regency index and confidence (kab * 3 + conf). */
+  counts: Int32Array[];
+  /** "YYYY-MM" and "slug|YYYY-MM" (regency or province) → hotspot count. */
+  monthly: Map<string, number>;
+}
+
+const loadHotspots = memo(async (): Promise<HotspotIndex> => {
+  const file = await readJson<MockHotspots>("hotspots.json");
+  const nKab = file.kabupaten.length;
+  const monthly = new Map<string, number>();
+  const add = (key: string, n: number) => monthly.set(key, (monthly.get(key) ?? 0) + n);
+  const counts = file.days.map((rows, d) => {
+    const perKab = new Int32Array(nKab * 3);
+    for (const row of rows) perKab[row[6] * 3 + row[4]]++;
+    const month = addDaysIso(file.start, d).slice(0, 7);
+    add(month, rows.length);
+    for (let k = 0; k < nKab; k++) {
+      const n = perKab[k * 3] + perKab[k * 3 + 1] + perKab[k * 3 + 2];
+      if (n === 0) continue;
+      add(`${file.kabupaten[k]}|${month}`, n);
+      add(`${file.provinsi[k]}|${month}`, n);
+    }
+    return perKab;
+  });
+  return { file, counts, monthly };
+});
+
+function hotspotFeature(file: MockHotspots, date: string, index: number, row: HotspotRow): HotspotFeature {
+  const [lon, lat, hhmm, sat, conf, frp, kab] = row;
+  const time = String(hhmm).padStart(4, "0");
+  return {
+    type: "Feature",
+    geometry: { type: "Point", coordinates: [lon, lat] },
+    properties: {
+      id: `HS-${date.replaceAll("-", "")}-${String(index + 1).padStart(4, "0")}`,
+      waktu_deteksi: `${date}T${time.slice(0, 2)}:${time.slice(2)}:00+07:00`,
+      satelit: file.satelit[sat] as Satellite,
+      confidence: file.confidence[conf] as Confidence,
+      frp,
+      provinsi: file.provinsi[kab],
+      kabupaten: file.kabupaten[kab],
+    },
+  };
 }
 
 function eachDate(start: string, end: string): string[] {
@@ -176,86 +358,123 @@ function eachMonth(start: string, end: string): string[] {
   return months;
 }
 
-function regionFromProps(props: Region): Region {
-  return { id: props.id, slug: props.slug, nama: props.nama, level: props.level };
+// ---------------------------------------------------------------------------
+// Weather
+
+function meanWeather(snapshots: WeatherSnapshot[]): WeatherSnapshot | null {
+  if (snapshots.length === 0) return null;
+  const mean = (pick: (w: WeatherSnapshot) => number, digits: number) =>
+    Math.round((snapshots.reduce((sum, w) => sum + pick(w), 0) / snapshots.length) * 10 ** digits) / 10 ** digits;
+  return {
+    tanggal: snapshots[0].tanggal,
+    suhu_c: mean((w) => w.suhu_c, 1),
+    kelembapan_persen: mean((w) => w.kelembapan_persen, 0),
+    curah_hujan_mm: mean((w) => w.curah_hujan_mm, 1),
+    kecepatan_angin_kmh: mean((w) => w.kecepatan_angin_kmh, 1),
+    hari_tanpa_hujan: mean((w) => w.hari_tanpa_hujan, 0),
+  };
 }
 
-async function listRegions(): Promise<Region[]> {
-  const regions = await loadRegions();
-  return regions.features
-    .map((f) => regionFromProps(f.properties))
-    .sort((a, b) => a.nama.localeCompare(b.nama, "id"));
-}
+// ---------------------------------------------------------------------------
+
+const round3 = (v: number) => Math.round(v * 1000) / 1000;
 
 export const mockDataSource: DataSource = {
-  async getHotspots({ start, end, minConfidence, bbox }) {
-    const { byDate } = await loadHotspots();
+  async getHotspots({ start, end, minConfidence, ...area }) {
+    const { file } = await loadHotspots();
     const minRank = CONFIDENCE_RANK[minConfidence];
-    const features = eachDate(start, end).flatMap((date) =>
-      (byDate.get(date) ?? []).filter(
-        (f) =>
-          CONFIDENCE_RANK[f.properties.confidence] >= minRank &&
-          (!bbox || pointInBBox(f.geometry.coordinates, bbox)),
-      ),
-    );
+    const features: HotspotFeature[] = [];
+    for (const date of eachDate(start, end)) {
+      const rows = file.days[diffDaysIso(date, file.start)] ?? [];
+      rows.forEach((row, index) => {
+        if (row[4] < minRank) return;
+        if (!inArea(area, file.provinsi[row[6]], file.kabupaten[row[6]])) return;
+        if (area.bbox && !pointInBBox([row[0], row[1]], area.bbox)) return;
+        features.push(hotspotFeature(file, date, index, row));
+      });
+    }
     return { type: "FeatureCollection", features };
   },
 
-  async getClusters({ date }) {
+  async getClusters({ date, ...area }) {
     const clusters = await loadClusters();
     return {
       type: "FeatureCollection",
-      features: clusters.features.filter((f) => f.properties.tanggal === date),
+      features: clusters.features.filter(
+        (f) =>
+          f.properties.tanggal === date &&
+          inArea(area, f.properties.provinsi, f.properties.kabupaten) &&
+          (!area.bbox || f.geometry.coordinates[0].some((p) => pointInBBox(p, area.bbox!))),
+      ),
     };
   },
 
-  async getRiskCells({ targetDate, bbox }) {
-    const features = await riskFeatures(targetDate);
-    if (!bbox) return { type: "FeatureCollection", features };
+  async getRiskCells({ targetDate, ...area }) {
     const grid = await loadGrid();
+    return { type: "FeatureCollection", features: await riskFeatures(targetDate, cellsInArea(grid, area)) };
+  },
+
+  async getRegions() {
+    return (await loadRegions()).list;
+  },
+
+  async getRegionBoundaries({ level, provinsi }) {
+    const regions = await loadRegions();
+    if (level === "provinsi") return regions.provinces;
+    if (!provinsi) return regions.regencies;
     return {
       type: "FeatureCollection",
-      features: features.filter((_, i) => bboxIntersects(grid[i].bbox, bbox)),
+      features: regions.regencies.features.filter((f) => f.properties.provinsi === provinsi),
     };
   },
 
-  getRegions: listRegions,
-
-  async getRegionBoundaries() {
-    return loadRegions();
-  },
+  getProvinceLines: loadProvinceLines,
 
   async getRegionDetail(slug) {
     const [regions, grid] = await Promise.all([loadRegions(), loadGrid()]);
-    const feature = regions.features.find((f) => f.properties.slug === slug);
+    const feature = regions.bySlug.get(slug);
     if (!feature) return null;
-    const rings =
-      feature.geometry.type === "Polygon"
-        ? [feature.geometry.coordinates[0]]
-        : feature.geometry.coordinates.map((polygon) => polygon[0]);
-    const largest = rings.reduce((a, b) => (ringAreaKm2(b) > ringAreaKm2(a) ? b : a));
-    const boxes = rings.map(ringBBox);
-    const regionCells = grid.filter((c) => c.kabupaten === slug);
-    const peat = regionCells.filter((c) => c.isGambut).length;
+    const p = feature.properties;
+    const polygons = feature.geometry.type === "Polygon" ? [feature.geometry.coordinates] : feature.geometry.coordinates;
+    const area = polygons.reduce(
+      (sum, [outer, ...holes]) => sum + ringAreaKm2(outer) - holes.reduce((s, hole) => s + ringAreaKm2(hole), 0),
+      0,
+    );
+    const cells = (p.level === "provinsi" ? grid.byProv : grid.byKab).get(slug) ?? [];
+    const peat = cells.reduce((n, i) => n + grid.gambut[i], 0);
+    const parent = p.provinsi ? regions.bySlug.get(p.provinsi) : undefined;
     const detail: RegionDetail = {
-      ...regionFromProps(feature.properties),
-      bbox: [
-        Math.min(...boxes.map((b) => b[0])),
-        Math.min(...boxes.map((b) => b[1])),
-        Math.max(...boxes.map((b) => b[2])),
-        Math.max(...boxes.map((b) => b[3])),
-      ],
-      pusat: ringCentroid(largest).map((v) => Math.round(v * 1e4) / 1e4) as Position,
-      luas_km2: Math.round(rings.reduce((sum, ring) => sum + ringAreaKm2(ring), 0)),
-      persen_gambut: regionCells.length ? Math.round((peat / regionCells.length) * 1000) / 10 : 0,
-      jumlah_sel: regionCells.length,
+      id: p.id,
+      slug: p.slug,
+      nama: p.nama,
+      level: p.level,
+      provinsi: p.provinsi,
+      nama_provinsi: parent?.properties.nama ?? null,
+      bbox: p.bbox,
+      pusat: p.label as Position,
+      luas_km2: Math.round(area),
+      persen_gambut: cells.length ? Math.round((peat / cells.length) * 1000) / 10 : 0,
+      jumlah_sel: cells.length,
+      jumlah_kabupaten: p.level === "provinsi" ? (regions.children.get(slug)?.length ?? 0) : 0,
     };
     return detail;
   },
 
   async getWeather(slug) {
-    const weather = await loadWeather();
+    const [weather, regions] = await Promise.all([loadWeather(), loadRegions()]);
+    const children = regions.children.get(slug);
+    if (children) return meanWeather(children.flatMap((child) => weather.data[child] ?? []));
     return weather.data[slug] ?? null;
+  },
+
+  async getWeatherList(provinsi) {
+    const [weather, regions] = await Promise.all([loadWeather(), loadRegions()]);
+    return regions.regencies.features
+      .filter((f) => !provinsi || f.properties.provinsi === provinsi)
+      .flatMap(({ properties: p }): RegionWeather[] => {
+        const cuaca = weather.data[p.slug];
+        return cuaca ? [{ slug: p.slug, nama: p.nama, provinsi: p.provinsi, cuaca }] : [];
+      });
   },
 
   async getMonthlyTrend({ start, end, slug }): Promise<MonthlyTrend[]> {
@@ -266,36 +485,55 @@ export const mockDataSource: DataSource = {
     }));
   },
 
-  async getRegionStats({ date, start, end }) {
-    const [status, regions, hotspots, cells] = await Promise.all([
+  async getRegionStats({ date, start, end, level, provinsi, minConfidence = "low" }) {
+    const [status, regions, hotspots, grid, risk] = await Promise.all([
       loadStatus(),
-      listRegions(),
+      loadRegions(),
       loadHotspots(),
-      riskFeatures(date),
+      loadGrid(),
+      riskDay(date),
     ]);
     const windowEnd = end ?? status.tanggal_data;
     const windowStart = start ?? addDaysIso(windowEnd, -29);
-    const counts = new Map<string, number>();
+    const minRank = CONFIDENCE_RANK[minConfidence];
+    const { file, counts } = hotspots;
+
+    // Hotspots per regency index (hotspot file order).
+    const perKab = new Int32Array(file.kabupaten.length);
     for (const day of eachDate(windowStart, windowEnd)) {
-      for (const f of hotspots.byDate.get(day) ?? []) {
-        counts.set(f.properties.kabupaten, (counts.get(f.properties.kabupaten) ?? 0) + 1);
+      const dayCounts = counts[diffDaysIso(day, file.start)];
+      if (!dayCounts) continue;
+      for (let k = 0; k < perKab.length; k++) {
+        for (let c = minRank; c < 3; c++) perKab[k] += dayCounts[k * 3 + c];
       }
     }
-    const scores = new Map<string, { sum: number; n: number }>();
-    for (const cell of cells) {
-      const entry = scores.get(cell.properties.kabupaten) ?? { sum: 0, n: 0 };
-      entry.sum += cell.properties.skor_risiko;
-      entry.n += 1;
-      scores.set(cell.properties.kabupaten, entry);
+    const hotspotsBySlug = new Map<string, number>();
+    file.kabupaten.forEach((slug, k) => {
+      hotspotsBySlug.set(slug, perKab[k]);
+      hotspotsBySlug.set(file.provinsi[k], (hotspotsBySlug.get(file.provinsi[k]) ?? 0) + perKab[k]);
+    });
+
+    const riskBySlug = new Map<string, { sum: number; count: number; max: number }>(risk?.prov ?? []);
+    if (risk) {
+      grid.kabSlugs.forEach((slug, k) =>
+        riskBySlug.set(slug, { sum: risk.kab.sum[k], count: risk.kab.count[k], max: risk.kab.max[k] }),
+      );
     }
-    return regions
-      .map((region) => {
-        const score = scores.get(region.slug);
+
+    const source = level === "provinsi" ? regions.provinces : regions.regencies;
+    return source.features
+      .filter((f) => level === "provinsi" || !provinsi || f.properties.provinsi === provinsi)
+      .map(({ properties: p }): RegionStat => {
+        const score = riskBySlug.get(p.slug);
         return {
-          slug: region.slug,
-          nama: region.nama,
-          jumlah_hotspot: counts.get(region.slug) ?? 0,
-          rata_skor_risiko: score ? Math.round((score.sum / score.n) * 1000) / 1000 : 0,
+          slug: p.slug,
+          nama: p.nama,
+          level: p.level,
+          provinsi: p.provinsi,
+          jumlah_hotspot: hotspotsBySlug.get(p.slug) ?? 0,
+          rata_skor_risiko: score?.count ? round3(score.sum / score.count) : 0,
+          maks_skor_risiko: score ? round3(score.max) : 0,
+          jumlah_sel: score?.count ?? 0,
         };
       })
       .sort((a, b) => b.rata_skor_risiko - a.rata_skor_risiko);

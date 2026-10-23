@@ -7,6 +7,7 @@ import { RiskBadge } from "@/components/ui/risk-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/state";
 import { formatDecimal } from "@/lib/format";
+import { regionHref } from "@/lib/labels";
 import { getRiskLevel } from "@/lib/risk";
 import { cn } from "@/lib/utils";
 import type { RegionStat, RiskLevel } from "@/types";
@@ -75,7 +76,7 @@ export function TopRegions({
         return (
           <li key={region.slug}>
             <Link
-              href={`/wilayah/${region.slug}`}
+              href={regionHref(region)}
               className="group -mx-1 flex min-h-11 items-center gap-3 rounded-lg px-2 py-1.5 transition-colors duration-150 hover:bg-muted/70"
             >
               <span className="w-3 font-mono text-xs text-muted-foreground tabular-nums">{index + 1}</span>

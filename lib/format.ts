@@ -59,6 +59,13 @@ export function formatMonth(value: string, withYear = true): string {
   return format(parseISO(`${value}-01`), withYear ? "MMM yyyy" : "MMM", { locale: id });
 }
 
+/** "2026-10" shifted by `delta` months, e.g. shiftMonth("2026-01", -1) = "2025-12". */
+export function shiftMonth(month: string, delta: number): string {
+  const [year, m] = month.split("-").map(Number);
+  const index = year * 12 + (m - 1) + delta;
+  return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, "0")}`;
+}
+
 /** ISO date arithmetic without time zone drift. */
 export function addDaysIso(date: string, days: number): string {
   return format(addDays(parseISO(date), days), "yyyy-MM-dd");

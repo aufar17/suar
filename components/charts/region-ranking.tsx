@@ -1,14 +1,16 @@
 "use client";
 
-import { ChevronRight, MapPinOff } from "lucide-react";
+import { ChevronDown, ChevronRight, MapPinOff } from "lucide-react";
 import { motion } from "motion/react";
 import Link from "next/link";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { DownloadCsvButton } from "@/components/ui/download-button";
 import { RiskBadge } from "@/components/ui/risk-badge";
 import { Segmented } from "@/components/ui/segmented";
 import { EmptyState } from "@/components/ui/state";
 import { formatDecimal, formatInteger } from "@/lib/format";
+import { regionHref } from "@/lib/labels";
 import { getRiskLevel } from "@/lib/risk";
 import { cn } from "@/lib/utils";
 import type { RegionStat, RiskLevel } from "@/types";
@@ -28,13 +30,19 @@ export function RegionRanking({
   highlight,
   hotspotPeriod,
   riskDateLabel,
+  filename = "siapi-peringkat-wilayah.csv",
+  limit,
 }: {
   stats: RegionStat[];
   highlight: string | null;
   hotspotPeriod: string;
   riskDateLabel: string;
+  filename?: string;
+  /** Rows shown before "Tampilkan semua" (all when omitted). */
+  limit?: number;
 }) {
   const [sort, setSort] = useState<SortKey>("hotspot");
+  const [expanded, setExpanded] = useState(false);
   const sorted = [...stats].sort((a, b) =>
     sort === "hotspot" ? b.jumlah_hotspot - a.jumlah_hotspot : b.rata_skor_risiko - a.rata_skor_risiko,
   );
@@ -59,9 +67,17 @@ export function RegionRanking({
         <DownloadCsvButton
           variant="outline"
           label="CSV"
-          filename="siapi-peringkat-kabupaten.csv"
-          header={["slug", "nama", "jumlah_hotspot", "rata_skor_risiko"]}
-          rows={sorted.map((s) => [s.slug, s.nama, s.jumlah_hotspot, s.rata_skor_risiko])}
+          filename={filename}
+          header={["slug", "nama", "level", "provinsi", "jumlah_hotspot", "rata_skor_risiko", "maks_skor_risiko"]}
+          rows={sorted.map((s) => [
+            s.slug,
+            s.nama,
+            s.level,
+            s.provinsi ?? "",
+            s.jumlah_hotspot,
+            s.rata_skor_risiko,
+            s.maks_skor_risiko,
+          ])}
           className="h-9"
         />
       </div>
@@ -69,14 +85,14 @@ export function RegionRanking({
         {sort === "hotspot" ? `Jumlah hotspot, ${hotspotPeriod}.` : `Rata-rata skor risiko prediksi untuk ${riskDateLabel}.`}
       </p>
       <ol className="flex flex-col">
-        {sorted.map((region, index) => {
+        {(limit && !expanded ? sorted.slice(0, limit) : sorted).map((region, index) => {
           const value = sort === "hotspot" ? region.jumlah_hotspot / maxHotspot : region.rata_skor_risiko;
           const level = getRiskLevel(region.rata_skor_risiko);
           const active = region.slug === highlight;
           return (
             <motion.li key={region.slug} layout="position" transition={{ duration: 0.3, ease: [0.2, 0, 0, 1] }}>
               <Link
-                href={`/wilayah/${region.slug}`}
+                href={regionHref(region)}
                 aria-current={active ? "true" : undefined}
                 className={cn(
                   "group -mx-2 grid min-h-11 grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-x-3 rounded-lg px-2 py-1.5 transition-colors duration-150 hover:bg-muted/70 sm:grid-cols-[1.5rem_minmax(0,9rem)_minmax(0,1fr)_auto]",
@@ -114,6 +130,12 @@ export function RegionRanking({
           );
         })}
       </ol>
+      {limit && sorted.length > limit ? (
+        <Button variant="outline" onClick={() => setExpanded((value) => !value)} className="self-start" aria-expanded={expanded}>
+          <ChevronDown className={cn("transition-transform duration-200", expanded && "rotate-180")} />
+          {expanded ? `Tampilkan ${limit} teratas` : `Tampilkan semua (${formatInteger(sorted.length)})`}
+        </Button>
+      ) : null}
     </div>
   );
 }

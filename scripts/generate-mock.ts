@@ -1,31 +1,23 @@
 /**
- * Generates deterministic mock data for SiAPI into `mock/`.
+ * Generates deterministic mock data for SiAPI (all of Indonesia) into `mock/`.
  *
+ *   pnpm geo:build                         # once: boundaries in mock/kabupaten.geojson, provinsi.geojson
  *   pnpm mock:generate                     # latest data date = DEFAULT_END_DATE
  *   MOCK_END_DATE=2026-11-01 pnpm mock:generate
  *
- * Region boundaries are placeholders (a rough province outline split with a weighted
- * Voronoi / power diagram). Replace them with GADM/BIG boundaries later.
+ * Everything is placed on the real regency boundaries: grid cells are kept only where their
+ * centre lies inside a regency, and every hotspot lies on land. Fire activity follows the
+ * known pattern: peatlands of Riau, Jambi, South Sumatra and Kalimantan, savanna burning in
+ * East Nusa Tenggara, and the southern Papua lowlands, peaking July–October.
  */
 import fs from "node:fs";
 import path from "node:path";
 import { faker } from "@faker-js/faker";
 import { addDaysIso } from "../lib/format";
-import {
-  closeRing,
-  convexHull,
-  pointInRing,
-  ringAreaKm2,
-  round4,
-} from "../lib/geo";
+import { closeRing, convexHull, ringAreaKm2, round4 } from "../lib/geo";
+import { contributionValues, RISK_INTERCEPT } from "../lib/mock-model";
 import { getRiskLevel } from "../lib/risk";
-import type {
-  ClusterFeature,
-  ClusterStatus,
-  Position,
-  RegionBoundaryFeature,
-  WeatherSnapshot,
-} from "../types";
+import type { ClusterFeature, ClusterStatus, Position, RegionBoundaryCollection, WeatherSnapshot } from "../types";
 import type { MockGrid, MockHotspots, MockRisk, MockWeather } from "../types/mock";
 
 const DEFAULT_END_DATE = "2026-10-20";
@@ -62,140 +54,139 @@ function poisson(lambda: number): number {
   } while (p > limit);
   return k - 1;
 }
-function pick<T>(items: readonly T[]): T {
-  return items[Math.floor(rand() * items.length)];
-}
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 const round = (v: number, digits: number) => Math.round(v * 10 ** digits) / 10 ** digits;
 
 // ---------------------------------------------------------------------------
-// Regions (placeholder geometry)
+// Regions (real boundaries from `pnpm geo:build`)
 
-interface RegionSeed {
-  id: string;
+const kabupatenFile = path.join(OUT_DIR, "kabupaten.geojson");
+if (!fs.existsSync(kabupatenFile)) throw new Error("mock/kabupaten.geojson belum ada. Jalankan `pnpm geo:build` dulu.");
+const boundaries = JSON.parse(fs.readFileSync(kabupatenFile, "utf8")) as RegionBoundaryCollection;
+
+interface Kab {
   slug: string;
-  nama: string;
-  level: "kabupaten" | "kota";
-  center: Position;
-  /** Power-diagram weight in deg²; negative shrinks the region (used for cities). */
+  provinsi: string;
+  /** Polygons as [outer, ...holes]. */
+  polygons: Position[][][];
+  bbox: [number, number, number, number];
+}
+
+const kabs: Kab[] = boundaries.features.map((f) => ({
+  slug: f.properties.slug,
+  provinsi: f.properties.provinsi ?? "",
+  polygons: f.geometry.type === "Polygon" ? [f.geometry.coordinates] : f.geometry.coordinates,
+  bbox: f.properties.bbox,
+}));
+
+function pointInRing([x, y]: Position, ring: Position[]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+// Bucketed lookup: which regency (if any) contains a point.
+const BUCKET_DEG = 0.5;
+const bucketKey = (bx: number, by: number) => `${bx}:${by}`;
+const kabBuckets = new Map<string, number[]>();
+kabs.forEach((kab, i) => {
+  const [x0, y0, x1, y1] = kab.bbox;
+  for (let bx = Math.floor(x0 / BUCKET_DEG); bx <= Math.floor(x1 / BUCKET_DEG); bx++) {
+    for (let by = Math.floor(y0 / BUCKET_DEG); by <= Math.floor(y1 / BUCKET_DEG); by++) {
+      const key = bucketKey(bx, by);
+      kabBuckets.set(key, [...(kabBuckets.get(key) ?? []), i]);
+    }
+  }
+});
+
+/** Index of the regency containing the point, or -1 at sea. */
+function kabAt(point: Position): number {
+  const [x, y] = point;
+  for (const i of kabBuckets.get(bucketKey(Math.floor(x / BUCKET_DEG), Math.floor(y / BUCKET_DEG))) ?? []) {
+    const [x0, y0, x1, y1] = kabs[i].bbox;
+    if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+    for (const [outer, ...holes] of kabs[i].polygons) {
+      if (pointInRing(point, outer) && !holes.some((hole) => pointInRing(point, hole))) return i;
+    }
+  }
+  return -1;
+}
+
+// ---------------------------------------------------------------------------
+// Fire climate per province
+
+const SEASONS = {
+  // Sumatra and Kalimantan peatlands: long dry season Jul–Oct, small peak Feb–Mar (Riau).
+  gambut: [0.15, 0.3, 0.35, 0.12, 0.12, 0.3, 0.8, 1.3, 1.6, 1.1, 0.25, 0.08],
+  // Nusa Tenggara savanna: dry May–Nov.
+  sabana: [0.05, 0.05, 0.05, 0.15, 0.4, 0.7, 0.9, 1.3, 1.5, 1.4, 0.6, 0.1],
+  // Southern Papua lowlands: later peak, Sep–Nov.
+  papua: [0.05, 0.05, 0.05, 0.05, 0.1, 0.2, 0.4, 0.8, 1.3, 1.6, 1.4, 0.5],
+  // Wetter regions: little seasonality.
+  basah: [0.3, 0.3, 0.3, 0.3, 0.4, 0.5, 0.7, 0.9, 1.0, 0.8, 0.4, 0.3],
+} as const;
+
+interface FireClimate {
+  /** Relative fire activity per km² of land. */
   weight: number;
-  /** 0..1, how wet the area is (more rain, fewer dry days). */
+  season: readonly number[];
+  /** 0..1, how wet the area is (rain, humidity). */
   wetness: number;
 }
 
-const REGION_SEEDS: RegionSeed[] = [
-  { id: "1401", slug: "kuantan-singingi", nama: "Kuantan Singingi", level: "kabupaten", center: [101.45, -0.5], weight: 0, wetness: 0.7 },
-  { id: "1402", slug: "indragiri-hulu", nama: "Indragiri Hulu", level: "kabupaten", center: [102.3, -0.5], weight: 0, wetness: 0.55 },
-  { id: "1403", slug: "indragiri-hilir", nama: "Indragiri Hilir", level: "kabupaten", center: [103.2, -0.3], weight: 0.05, wetness: 0.3 },
-  { id: "1404", slug: "pelalawan", nama: "Pelalawan", level: "kabupaten", center: [102.25, 0.25], weight: 0.05, wetness: 0.25 },
-  { id: "1405", slug: "siak", nama: "Siak", level: "kabupaten", center: [101.95, 0.9], weight: 0, wetness: 0.3 },
-  { id: "1406", slug: "kampar", nama: "Kampar", level: "kabupaten", center: [100.95, 0.3], weight: 0.03, wetness: 0.65 },
-  { id: "1407", slug: "rokan-hulu", nama: "Rokan Hulu", level: "kabupaten", center: [100.45, 0.95], weight: 0, wetness: 0.75 },
-  { id: "1408", slug: "bengkalis", nama: "Bengkalis", level: "kabupaten", center: [101.55, 1.25], weight: 0, wetness: 0.25 },
-  { id: "1409", slug: "rokan-hilir", nama: "Rokan Hilir", level: "kabupaten", center: [100.85, 1.85], weight: 0.04, wetness: 0.35 },
-  { id: "1410", slug: "kepulauan-meranti", nama: "Kepulauan Meranti", level: "kabupaten", center: [102.75, 1.05], weight: -0.02, wetness: 0.2 },
-  { id: "1471", slug: "pekanbaru", nama: "Pekanbaru", level: "kota", center: [101.45, 0.52], weight: -0.2, wetness: 0.5 },
-  { id: "1473", slug: "dumai", nama: "Dumai", level: "kota", center: [101.45, 1.65], weight: -0.16, wetness: 0.35 },
-];
+const FIRE: Record<string, FireClimate> = {
+  riau: { weight: 1.0, season: SEASONS.gambut, wetness: 0.2 },
+  jambi: { weight: 0.75, season: SEASONS.gambut, wetness: 0.25 },
+  "sumatera-selatan": { weight: 1.25, season: SEASONS.gambut, wetness: 0.2 },
+  "kalimantan-barat": { weight: 1.1, season: SEASONS.gambut, wetness: 0.3 },
+  "kalimantan-tengah": { weight: 1.4, season: SEASONS.gambut, wetness: 0.15 },
+  "kalimantan-selatan": { weight: 0.65, season: SEASONS.gambut, wetness: 0.3 },
+  "kalimantan-timur": { weight: 0.6, season: SEASONS.gambut, wetness: 0.4 },
+  "nusa-tenggara-timur": { weight: 1.1, season: SEASONS.sabana, wetness: 0.12 },
+  papua: { weight: 0.35, season: SEASONS.papua, wetness: 0.6 },
+  lampung: { weight: 0.3, season: SEASONS.gambut, wetness: 0.45 },
+  "kepulauan-bangka-belitung": { weight: 0.2, season: SEASONS.gambut, wetness: 0.45 },
+  "sumatera-utara": { weight: 0.15, season: SEASONS.gambut, wetness: 0.6 },
+  aceh: { weight: 0.1, season: SEASONS.gambut, wetness: 0.65 },
+  "kalimantan-utara": { weight: 0.15, season: SEASONS.gambut, wetness: 0.6 },
+  "nusa-tenggara-barat": { weight: 0.3, season: SEASONS.sabana, wetness: 0.3 },
+  "sulawesi-selatan": { weight: 0.12, season: SEASONS.sabana, wetness: 0.5 },
+  "sulawesi-tenggara": { weight: 0.15, season: SEASONS.sabana, wetness: 0.5 },
+  "sulawesi-tengah": { weight: 0.1, season: SEASONS.basah, wetness: 0.6 },
+  "sulawesi-barat": { weight: 0.06, season: SEASONS.basah, wetness: 0.6 },
+  gorontalo: { weight: 0.07, season: SEASONS.sabana, wetness: 0.5 },
+  "jawa-timur": { weight: 0.12, season: SEASONS.sabana, wetness: 0.45 },
+  "jawa-tengah": { weight: 0.06, season: SEASONS.sabana, wetness: 0.55 },
+  "papua-barat": { weight: 0.08, season: SEASONS.papua, wetness: 0.7 },
+  maluku: { weight: 0.06, season: SEASONS.papua, wetness: 0.7 },
+  "dki-jakarta": { weight: 0.005, season: SEASONS.basah, wetness: 0.6 },
+};
+const DEFAULT_FIRE: FireClimate = { weight: 0.05, season: SEASONS.basah, wetness: 0.6 };
+const fireOf = (provinsi: string) => FIRE[provinsi] ?? DEFAULT_FIRE;
 
-/** Rough counter-clockwise outline of Riau province. */
-const PROVINCE_OUTLINE: Position[] = [
-  [100.05, 1.05],
-  [100.15, 0.55],
-  [100.45, 0.2],
-  [100.8, -0.25],
-  [101.1, -0.7],
-  [101.6, -1.05],
-  [102.1, -0.95],
-  [102.8, -1.05],
-  [103.45, -1.0],
-  [103.72, -0.5],
-  [103.8, 0.05],
-  [103.55, 0.55],
-  [103.1, 0.9],
-  [102.95, 1.25],
-  [102.4, 1.45],
-  [101.85, 1.75],
-  [101.45, 1.8],
-  [101.1, 2.3],
-  [100.85, 2.7],
-  [100.55, 2.25],
-  [100.3, 1.6],
-];
-
-function clipHalfPlane(poly: Position[], a: Position, b: number): Position[] {
-  // Keeps points x where a·x <= b (Sutherland–Hodgman against one half-plane).
-  const out: Position[] = [];
-  for (let i = 0; i < poly.length; i++) {
-    const cur = poly[i];
-    const prev = poly[(i + poly.length - 1) % poly.length];
-    const fc = a[0] * cur[0] + a[1] * cur[1] - b;
-    const fp = a[0] * prev[0] + a[1] * prev[1] - b;
-    const intersect = (): Position => {
-      const t = fp / (fp - fc);
-      return [prev[0] + t * (cur[0] - prev[0]), prev[1] + t * (cur[1] - prev[1])];
-    };
-    if (fc <= 0) {
-      if (fp > 0) out.push(intersect());
-      out.push(cur);
-    } else if (fp <= 0) {
-      out.push(intersect());
-    }
-  }
-  return out;
+/** Only the southern lowlands of Papua burn regularly; the highlands and the north are wet. */
+function localFactor(provinsi: string, [, lat]: Position): number {
+  if (provinsi === "papua") return lat < -6.3 ? 1.8 : 0.08;
+  return 1;
 }
-
-function powerCell(index: number): Position[] {
-  const ci = REGION_SEEDS[index];
-  let poly = PROVINCE_OUTLINE;
-  REGION_SEEDS.forEach((cj, j) => {
-    if (j === index) return;
-    const [xi, yi] = ci.center;
-    const [xj, yj] = cj.center;
-    const a: Position = [2 * (xj - xi), 2 * (yj - yi)];
-    const b = xj * xj + yj * yj - (xi * xi + yi * yi) - cj.weight + ci.weight;
-    poly = clipHalfPlane(poly, a, b);
-  });
-  return poly;
-}
-
-function regionIndexAt([x, y]: Position): number {
-  let best = 0;
-  let bestDist = Infinity;
-  REGION_SEEDS.forEach((seed, i) => {
-    const d = (x - seed.center[0]) ** 2 + (y - seed.center[1]) ** 2 - seed.weight;
-    if (d < bestDist) {
-      bestDist = d;
-      best = i;
-    }
-  });
-  return best;
-}
-
-const inProvince = (p: Position) => pointInRing(p, PROVINCE_OUTLINE);
-
-const regionRings = REGION_SEEDS.map((_, i) =>
-  closeRing(powerCell(i).map(([x, y]) => [round4(x), round4(y)] as Position)),
-);
-const regionFeatures: RegionBoundaryFeature[] = REGION_SEEDS.map((seed, i) => ({
-  type: "Feature",
-  geometry: { type: "Polygon", coordinates: [regionRings[i]] },
-  properties: { id: seed.id, slug: seed.slug, nama: seed.nama, level: seed.level },
-}));
 
 // ---------------------------------------------------------------------------
 // Grid (~5 km cells) and peatland
 
 const CELL = 0.045;
-const ORIGIN: Position = [100.0, -1.1];
-const COLS = Math.ceil(3.8 / CELL);
-const ROWS = Math.ceil(4.0 / CELL);
+const ORIGIN: Position = [95.0, -11.1];
+const COLS = Math.ceil((141.1 - ORIGIN[0]) / CELL);
+const ROWS = Math.ceil((6.1 - ORIGIN[1]) / CELL);
 
 interface Cell {
   row: number;
   col: number;
   center: Position;
-  region: number;
+  kab: number;
   gambut: boolean;
   ndvi: number;
 }
@@ -204,32 +195,76 @@ const cells: Cell[] = [];
 for (let row = 0; row < ROWS; row++) {
   for (let col = 0; col < COLS; col++) {
     const center: Position = [ORIGIN[0] + (col + 0.5) * CELL, ORIGIN[1] + (row + 0.5) * CELL];
-    if (!inProvince(center)) continue;
-    cells.push({ row, col, center, region: regionIndexAt(center), gambut: false, ndvi: 0 });
+    const kab = kabAt(center);
+    if (kab >= 0) cells.push({ row, col, center, kab, gambut: false, ndvi: 0 });
   }
 }
 
-// Peat: clustered blobs biased towards the east/coast, then take the top 40%.
-const blobs = Array.from({ length: 30 }, () => ({
-  center: [100.3 + 3.4 * Math.sqrt(rand()), uniform(-1.0, 2.5)] as Position,
-  amp: uniform(0.6, 1.2),
-  radius: uniform(0.15, 0.45),
-}));
-const peatField = cells.map((cell) => {
+/** Large peat domes: [lon, lat, amplitude, radius in degrees]. */
+const PEAT_BLOBS: [number, number, number, number][] = [
+  // Riau
+  [102.5, 0.45, 1.1, 0.45], [101.8, 1.4, 1.0, 0.35], [103.0, -0.3, 1.0, 0.4], [102.75, 1.0, 1.0, 0.3], [101.2, 1.8, 0.8, 0.3],
+  // Jambi
+  [103.8, -1.2, 1.0, 0.35], [104.0, -1.65, 0.8, 0.25],
+  // South Sumatra (OKI, Banyuasin, Musi Banyuasin)
+  [105.3, -3.2, 1.1, 0.45], [104.7, -2.55, 1.0, 0.35], [105.6, -2.75, 0.9, 0.3],
+  // West Kalimantan
+  [109.5, -0.3, 1.0, 0.4], [110.0, -1.7, 1.0, 0.4], [112.2, 0.8, 0.8, 0.35], [109.2, 0.9, 0.7, 0.25],
+  // Central Kalimantan
+  [114.0, -2.6, 1.2, 0.5], [113.3, -2.9, 1.1, 0.45], [114.5, -2.1, 1.0, 0.4], [112.6, -2.9, 1.0, 0.4], [111.8, -2.9, 0.9, 0.35],
+  // South Kalimantan
+  [114.75, -2.6, 0.9, 0.3], [115.0, -3.0, 0.7, 0.25],
+  // East Kalimantan (Mahakam)
+  [116.5, -0.3, 0.8, 0.35], [116.9, 0.5, 0.6, 0.25],
+  // Southern Papua
+  [139.5, -7.5, 1.0, 0.6], [138.8, -6.8, 0.9, 0.5], [139.9, -8.1, 0.8, 0.4],
+  // Smaller ones: Bintuni, Aceh west coast, North Sumatra east coast
+  [133.5, -2.1, 0.7, 0.3], [96.5, 3.95, 0.7, 0.25], [100.1, 2.4, 0.7, 0.3],
+];
+cells.forEach((cell) => {
   const [x, y] = cell.center;
-  let value = 1.1 * ((x - 100) / 3.8) ** 2 + gaussian(0, 0.08);
-  for (const blob of blobs) {
-    const d2 = (x - blob.center[0]) ** 2 + (y - blob.center[1]) ** 2;
-    value += blob.amp * Math.exp(-d2 / (2 * blob.radius ** 2));
+  let value = gaussian(0, 0.08);
+  for (const [bx, by, amp, radius] of PEAT_BLOBS) {
+    if (Math.abs(x - bx) > radius * 4 || Math.abs(y - by) > radius * 4) continue;
+    const d2 = (x - bx) ** 2 + (y - by) ** 2;
+    value += amp * Math.exp(-d2 / (2 * radius ** 2));
   }
-  return value;
+  cell.gambut = value > 0.55;
+  const provinsi = kabs[cell.kab].provinsi;
+  const base = cell.gambut ? 0.46 : provinsi === "nusa-tenggara-timur" ? 0.38 : provinsi === "papua" && y > -6 ? 0.68 : 0.56;
+  cell.ndvi = round(clamp(gaussian(base, 0.11), 0.1, 0.9), 2);
 });
-const peatThreshold = [...peatField].sort((a, b) => b - a)[Math.floor(cells.length * 0.4)];
-cells.forEach((cell, i) => {
-  cell.gambut = peatField[i] > peatThreshold;
-  cell.ndvi = round(clamp(gaussian(cell.gambut ? 0.46 : 0.55, 0.12), 0.12, 0.88), 2);
+const peatCount = cells.filter((c) => c.gambut).length;
+
+// Fire weight per cell and month, with lognormal local variation.
+const cellHeat = cells.map(() => Math.exp(gaussian(0, 0.7)));
+const cellWeight = (i: number, month: number) => {
+  const cell = cells[i];
+  const provinsi = kabs[cell.kab].provinsi;
+  const fire = fireOf(provinsi);
+  return fire.weight * fire.season[month] * (cell.gambut ? 4 : 1) * localFactor(provinsi, cell.center) * cellHeat[i];
+};
+const cumulative = Array.from({ length: 12 }, (_, month) => {
+  const sums = new Float64Array(cells.length);
+  let total = 0;
+  for (let i = 0; i < cells.length; i++) {
+    total += cellWeight(i, month);
+    sums[i] = total;
+  }
+  return sums;
 });
-const peatCells = cells.filter((c) => c.gambut);
+function pickCell(month: number): Cell {
+  const sums = cumulative[month];
+  const r = rand() * sums[sums.length - 1];
+  let lo = 0;
+  let hi = sums.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (sums[mid] < r) lo = mid + 1;
+    else hi = mid;
+  }
+  return cells[lo];
+}
 
 // ---------------------------------------------------------------------------
 // Hotspots (24 months)
@@ -237,9 +272,11 @@ const peatCells = cells.filter((c) => c.gambut);
 const SATELLITES = ["VIIRS_SNPP", "VIIRS_NOAA20", "MODIS"] as const;
 const CONFIDENCES = ["low", "nominal", "high"] as const;
 
-/** Mean daily hotspots per month (index 0 = January). Peak season Jul–Oct. */
-const MONTH_BASE = [12, 30, 40, 14, 10, 28, 85, 135, 125, 100, 14, 7];
-const YEAR_FACTOR: Record<number, number> = { 2024: 1.0, 2025: 0.8, 2026: 1.25 };
+/** National mean daily hotspots per unit of monthly fire intensity. */
+const MONTHLY_INTENSITY = cumulative.map((sums) => sums[sums.length - 1]);
+const MEAN_INTENSITY = MONTHLY_INTENSITY.reduce((a, b) => a + b, 0) / 12;
+const MEAN_DAILY = 260;
+const YEAR_FACTOR: Record<number, number> = { 2024: 1.0, 2025: 0.7, 2026: 1.3 };
 
 const [endYear, endMonth] = END_DATE.split("-").map(Number);
 const startMonthIndex = endYear * 12 + (endMonth - 1) - 23;
@@ -247,6 +284,7 @@ const START_DATE = `${Math.floor(startMonthIndex / 12)}-${String((startMonthInde
 
 interface FireCenter {
   pos: Position;
+  kab: number;
   intensity: number;
   daysLeft: number;
   sigma: number;
@@ -254,65 +292,72 @@ interface FireCenter {
 
 interface RawHotspot {
   pos: Position;
-  date: string;
-  time: string;
+  hhmm: number;
   sat: number;
   conf: number;
   frp: number;
-  region: number;
+  kab: number;
 }
 
-function jitterCellCenter(cell: Cell): Position {
-  return [cell.center[0] + uniform(-CELL / 2, CELL / 2), cell.center[1] + uniform(-CELL / 2, CELL / 2)];
+function jitterInCell(cell: Cell): { pos: Position; kab: number } {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const pos: Position = [cell.center[0] + uniform(-CELL / 2, CELL / 2), cell.center[1] + uniform(-CELL / 2, CELL / 2)];
+    const kab = kabAt(pos);
+    if (kab >= 0) return { pos, kab };
+  }
+  return { pos: cell.center, kab: cell.kab };
 }
 
-function spawnCenter(): FireCenter {
-  const cell = rand() < 0.85 ? pick(peatCells) : pick(cells);
+function spawnCenter(month: number): FireCenter {
+  const cell = pickCell(month);
+  const { pos, kab } = jitterInCell(cell);
   return {
-    pos: jitterCellCenter(cell),
+    pos,
+    kab,
     intensity: Math.exp(gaussian(Math.log(6), 0.6)),
     daysLeft: 2 + Math.floor(Math.log(Math.max(rand(), 1e-9)) / Math.log(0.72)),
     sigma: uniform(0.01, 0.03),
   };
 }
 
-function detectionTime(sat: number): string {
+/** Overpass time in WIB as HHmm. */
+function detectionTime(sat: number): number {
   const day = rand() < 0.75;
   let minutes: number;
   if (sat === 2) minutes = day ? (rand() < 0.5 ? 10 * 60 + 20 : 13 * 60 + 20) + randInt(0, 40) : 22 * 60 + 20 + randInt(0, 40);
   else minutes = (day ? 13 * 60 : 60) + randInt(0, 80);
-  return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+  return Math.floor(minutes / 60) * 100 + (minutes % 60);
 }
 
-const hotspots: RawHotspot[] = [];
-const dailyCounts = new Map<string, number>();
+const totalDays = 1 + Math.round((Date.parse(END_DATE) - Date.parse(START_DATE)) / 86_400_000);
+const days: RawHotspot[][] = [];
 let activeCenters: FireCenter[] = [];
 let noise = 0;
-const totalDays = 1 + Math.round((Date.parse(END_DATE) - Date.parse(START_DATE)) / 86_400_000);
 
 for (let d = 0; d < totalDays; d++) {
   const date = addDaysIso(START_DATE, d);
   const [year, month] = date.split("-").map(Number);
   const daysToEnd = totalDays - 1 - d;
-  noise = 0.7 * noise + gaussian(0, 0.4);
-  let lambda = MONTH_BASE[month - 1] * (YEAR_FACTOR[year] ?? 1) * Math.exp(noise);
-  if (daysToEnd < 7) lambda = Math.max(lambda, 135 + 8 * (7 - daysToEnd));
+  noise = 0.7 * noise + gaussian(0, 0.35);
+  let lambda = (MEAN_DAILY * MONTHLY_INTENSITY[month - 1]) / MEAN_INTENSITY * (YEAR_FACTOR[year] ?? 1) * Math.exp(noise);
+  if (daysToEnd < 7) lambda = Math.max(lambda, 950 + 40 * (7 - daysToEnd));
   let count = poisson(lambda);
-  if (daysToEnd === 0) count = Math.max(count, 185);
+  if (daysToEnd === 0) count = Math.max(count, 1150);
 
   // Keep enough active fire centers for today's activity.
   activeCenters = activeCenters
     .filter((c) => c.daysLeft-- > 0)
     .map((c) => ({ ...c, intensity: c.intensity * Math.exp(gaussian(0, 0.35)) }));
   const targetCenters = Math.max(1, Math.round(count / 9));
-  while (activeCenters.length < targetCenters) activeCenters.push(spawnCenter());
+  while (activeCenters.length < targetCenters) activeCenters.push(spawnCenter(month - 1));
   const totalIntensity = activeCenters.reduce((sum, c) => sum + c.intensity, 0);
 
   const todays: RawHotspot[] = [];
   for (let k = 0; k < count; k++) {
     let pos: Position;
+    let kab: number;
     if (rand() < 0.85) {
-      // Weighted pick of a fire center.
+      // Weighted pick of a fire center, then a point around it that is still on land.
       let r = rand() * totalIntensity;
       let center = activeCenters[0];
       for (const c of activeCenters) {
@@ -323,15 +368,18 @@ for (let d = 0; d < totalDays; d++) {
         }
       }
       pos = center.pos;
+      kab = center.kab;
       for (let attempt = 0; attempt < 6; attempt++) {
         const candidate: Position = [gaussian(center.pos[0], center.sigma), gaussian(center.pos[1], center.sigma)];
-        if (inProvince(candidate)) {
+        const at = kabAt(candidate);
+        if (at >= 0) {
           pos = candidate;
+          kab = at;
           break;
         }
       }
     } else {
-      pos = jitterCellCenter(pick(cells));
+      ({ pos, kab } = jitterInCell(pickCell(month - 1)));
     }
     const sat = rand() < 0.4 ? 0 : rand() < 0.67 ? 1 : 2;
     const frp = round(clamp(Math.exp(gaussian(Math.log(6), 0.9)), 0.3, 250), 1);
@@ -339,28 +387,45 @@ for (let d = 0; d < totalDays; d++) {
     const r = rand();
     if (frp > 15) conf = r < 0.6 ? 2 : 1;
     else conf = r < 0.18 ? 0 : r < 0.9 ? 1 : 2;
-    todays.push({
-      pos: [round4(pos[0]), round4(pos[1])],
-      date,
-      time: detectionTime(sat),
-      sat,
-      conf,
-      frp,
-      region: regionIndexAt(pos),
-    });
+    todays.push({ pos: [round4(pos[0]), round4(pos[1])], hhmm: detectionTime(sat), sat, conf, frp, kab });
   }
-  todays.sort((a, b) => a.time.localeCompare(b.time));
-  hotspots.push(...todays);
-  dailyCounts.set(date, count);
+  todays.sort((a, b) => a.hhmm - b.hhmm);
+  days.push(todays);
 }
+const totalHotspots = days.reduce((sum, list) => sum + list.length, 0);
 
 // ---------------------------------------------------------------------------
-// Clusters for the latest day (DBSCAN + convex hull)
+// Fire zones for the latest day (DBSCAN + convex hull)
+
+const latest = days[days.length - 1];
+const latestPoints = latest.map((h) => h.pos);
+
+function bucketIndex(points: Position[], size: number) {
+  const index = new Map<string, number[]>();
+  points.forEach(([x, y], i) => {
+    const key = bucketKey(Math.floor(x / size), Math.floor(y / size));
+    index.set(key, [...(index.get(key) ?? []), i]);
+  });
+  return index;
+}
 
 function dbscan(points: Position[], eps: number, minPts: number): number[] {
   const labels = new Array<number>(points.length).fill(-2); // -2 unvisited, -1 noise
-  const neighbors = (i: number) =>
-    points.flatMap((p, j) => (Math.hypot(p[0] - points[i][0], p[1] - points[i][1]) <= eps ? [j] : []));
+  const index = bucketIndex(points, eps);
+  const neighbors = (i: number) => {
+    const [x, y] = points[i];
+    const bx = Math.floor(x / eps);
+    const by = Math.floor(y / eps);
+    const found: number[] = [];
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (const j of index.get(bucketKey(bx + dx, by + dy)) ?? []) {
+          if (Math.hypot(points[j][0] - x, points[j][1] - y) <= eps) found.push(j);
+        }
+      }
+    }
+    return found;
+  };
   let cluster = 0;
   for (let i = 0; i < points.length; i++) {
     if (labels[i] !== -2) continue;
@@ -384,8 +449,6 @@ function dbscan(points: Position[], eps: number, minPts: number): number[] {
   return labels;
 }
 
-const latestHotspots = hotspots.filter((h) => h.date === END_DATE);
-const latestPoints = latestHotspots.map((h) => h.pos);
 const labels = dbscan(latestPoints, 0.04, 3);
 const groups = new Map<number, number[]>();
 labels.forEach((label, i) => {
@@ -393,20 +456,33 @@ labels.forEach((label, i) => {
   groups.set(label, [...(groups.get(label) ?? []), i]);
 });
 
-const hotspotsByDate = new Map<string, Position[]>();
-for (const h of hotspots) {
-  const list = hotspotsByDate.get(h.date) ?? [];
-  list.push(h.pos);
-  hotspotsByDate.set(h.date, list);
-}
-
+const dayIndexOf = (date: string) => Math.round((Date.parse(date) - Date.parse(START_DATE)) / 86_400_000);
+const dayBuckets = new Map<number, Map<string, number[]>>();
 function countNear(date: string, members: Position[], radius = 0.04): number {
-  const points = hotspotsByDate.get(date) ?? [];
-  return points.filter((p) => members.some((m) => Math.hypot(p[0] - m[0], p[1] - m[1]) <= radius)).length;
+  const d = dayIndexOf(date);
+  const points = (days[d] ?? []).map((h) => h.pos);
+  let index = dayBuckets.get(d);
+  if (!index) {
+    index = bucketIndex(points, radius);
+    dayBuckets.set(d, index);
+  }
+  const seen = new Set<number>();
+  for (const [x, y] of members) {
+    const bx = Math.floor(x / radius);
+    const by = Math.floor(y / radius);
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (const j of index.get(bucketKey(bx + dx, by + dy)) ?? []) {
+          if (!seen.has(j) && Math.hypot(points[j][0] - x, points[j][1] - y) <= radius) seen.add(j);
+        }
+      }
+    }
+  }
+  return seen.size;
 }
 
 const BUFFER = 0.008;
-const sortedGroups = [...groups.values()].sort((a, b) => b.length - a.length).slice(0, 15);
+const sortedGroups = [...groups.values()].sort((a, b) => b.length - a.length).slice(0, 45);
 const clusterFeatures: ClusterFeature[] = sortedGroups.map((indices, n) => {
   const members = indices.map((i) => latestPoints[i]);
   const expanded = members.flatMap(([x, y]) =>
@@ -427,9 +503,9 @@ const clusterFeatures: ClusterFeature[] = sortedGroups.map((indices, n) => {
   if (status !== "baru") {
     while (since < 30 && countNear(addDaysIso(END_DATE, -(since + 1)), members) > 0) since++;
   }
-  const regionVotes = new Map<number, number>();
-  indices.forEach((i) => regionVotes.set(latestHotspots[i].region, (regionVotes.get(latestHotspots[i].region) ?? 0) + 1));
-  const region = [...regionVotes.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  const votes = new Map<number, number>();
+  for (const i of indices) votes.set(latest[i].kab, (votes.get(latest[i].kab) ?? 0) + 1);
+  const kab = [...votes.entries()].sort((a, b) => b[1] - a[1])[0][0];
   return {
     type: "Feature",
     geometry: { type: "Polygon", coordinates: [closeRing(hull)] },
@@ -440,7 +516,8 @@ const clusterFeatures: ClusterFeature[] = sortedGroups.map((indices, n) => {
       luas_km2: round(ringAreaKm2(hull), 1),
       status,
       aktif_sejak: addDaysIso(END_DATE, -since),
-      kabupaten: REGION_SEEDS[region].slug,
+      provinsi: kabs[kab].provinsi,
+      kabupaten: kabs[kab].slug,
     },
   };
 });
@@ -454,37 +531,41 @@ interface DayWeather {
   rain: number;
 }
 
-const forecast: DayWeather[][] = REGION_SEEDS.map((seed) => {
-  let dry = Math.round(clamp(gaussian(20 - 14 * seed.wetness, 3), 0, 26));
-  let humidity = Math.round(clamp(gaussian(80 - dry * 1.1, 3), 45, 92));
-  const days: DayWeather[] = [{ dry, humidity, rain: dry === 0 ? round(uniform(3, 22), 1) : 0 }];
+const forecast: DayWeather[][] = kabs.map((kab, i) => {
+  const label = boundaries.features[i].properties.label;
+  // Southern Papua is as dry as the savanna in the late dry season.
+  const climate = kab.provinsi === "papua" && label[1] < -6.3 ? 0.25 : fireOf(kab.provinsi).wetness;
+  const wetness = clamp(climate + gaussian(0, 0.1), 0.05, 0.95);
+  let dry = Math.round(clamp(gaussian(30 - 26 * wetness, 3), 0, 35));
+  let humidity = Math.round(clamp(gaussian(80 - dry * 1.1, 3), 42, 94));
+  const list: DayWeather[] = [{ dry, humidity, rain: dry === 0 ? round(uniform(3, 22), 1) : 0 }];
   for (let t = 1; t <= 7; t++) {
-    const rains = rand() < 0.06 + 0.2 * seed.wetness;
+    const rains = rand() < 0.06 + 0.25 * wetness;
     if (rains) {
       dry = 0;
-      humidity = Math.round(clamp(humidity + uniform(8, 15), 45, 95));
+      humidity = Math.round(clamp(humidity + uniform(8, 15), 42, 96));
     } else {
       dry += 1;
-      humidity = Math.round(clamp(humidity - uniform(0, 2.5), 42, 95));
+      humidity = Math.round(clamp(humidity - uniform(0, 2.5), 40, 96));
     }
-    days.push({ dry, humidity, rain: rains ? round(uniform(4, 30), 1) : 0 });
+    list.push({ dry, humidity, rain: rains ? round(uniform(4, 30), 1) : 0 });
   }
-  return days;
+  return list;
 });
 
 const weather: MockWeather = {
   tanggal: END_DATE,
   data: Object.fromEntries(
-    REGION_SEEDS.map((seed, i): [string, WeatherSnapshot] => {
+    kabs.map((kab, i): [string, WeatherSnapshot] => {
       const today = forecast[i][0];
       return [
-        seed.slug,
+        kab.slug,
         {
           tanggal: END_DATE,
-          suhu_c: round(uniform(31, 34.5), 1),
+          suhu_c: round(uniform(29.5, 34.5), 1),
           kelembapan_persen: today.humidity,
           curah_hujan_mm: today.rain,
-          kecepatan_angin_kmh: round(uniform(6, 18), 1),
+          kecepatan_angin_kmh: round(uniform(5, 19), 1),
           hari_tanpa_hujan: today.dry,
         },
       ];
@@ -495,26 +576,18 @@ const weather: MockWeather = {
 // ---------------------------------------------------------------------------
 // Risk prediction for the next 7 days
 
-const FEATURES = ["hari_tanpa_hujan", "kelembapan", "lahan_gambut", "hotspot_sekitar", "ndvi"] as const;
-const decimal = (v: number, digits = 2) => v.toFixed(digits).replace(".", ",");
-
 // Hotspots in the last 7 days, bucketed for neighbour lookups within ~10 km.
-const BUCKET = 0.09;
-const recentBuckets = new Map<string, Position[]>();
-const recentStart = addDaysIso(END_DATE, -6);
-for (const h of hotspots) {
-  if (h.date < recentStart) continue;
-  const key = `${Math.floor(h.pos[0] / BUCKET)}:${Math.floor(h.pos[1] / BUCKET)}`;
-  recentBuckets.set(key, [...(recentBuckets.get(key) ?? []), h.pos]);
-}
+const NEAR = 0.09;
+const recentPoints = days.slice(-7).flat().map((h) => h.pos);
+const recentIndex = bucketIndex(recentPoints, NEAR);
 const nearbyCounts = cells.map(({ center: [x, y] }) => {
-  const bx = Math.floor(x / BUCKET);
-  const by = Math.floor(y / BUCKET);
+  const bx = Math.floor(x / NEAR);
+  const by = Math.floor(y / NEAR);
   let total = 0;
   for (let dx = -1; dx <= 1; dx++) {
     for (let dy = -1; dy <= 1; dy++) {
-      for (const p of recentBuckets.get(`${bx + dx}:${by + dy}`) ?? []) {
-        if (Math.hypot(p[0] - x, p[1] - y) <= BUCKET) total++;
+      for (const j of recentIndex.get(bucketKey(bx + dx, by + dy)) ?? []) {
+        if (Math.hypot(recentPoints[j][0] - x, recentPoints[j][1] - y) <= NEAR) total++;
       }
     }
   }
@@ -522,63 +595,49 @@ const nearbyCounts = cells.map(({ center: [x, y] }) => {
 });
 
 const targets = Array.from({ length: 7 }, (_, t) => addDaysIso(END_DATE, t + 1));
-const risk: MockRisk = { tanggal_prediksi: END_DATE, targets, fitur: [...FEATURES], scores: [], factors: [] };
 const cellNoise = cells.map(() => gaussian(0, 0.25));
+const risk: MockRisk = { tanggal_prediksi: END_DATE, targets, scores: [], cuaca: [] };
 
 targets.forEach((_, t) => {
-  const scores: number[] = [];
-  const factors: [number, number, string][][] = [];
-  cells.forEach((cell, i) => {
-    const day = forecast[cell.region][t + 1];
-    const hs = nearbyCounts[i];
-    const hsWeight = 1 - 0.06 * t; // older hotspots matter less further ahead
-    const contributions: [number, number, string][] = [
-      [0, 0.09 * (day.dry - 10), day.dry === 0 ? "Hujan turun sehari sebelumnya" : `${day.dry} hari tanpa hujan`],
-      [
-        1,
-        -0.05 * (day.humidity - 65),
-        day.humidity < 65 ? `Kelembapan rendah (${day.humidity}%)` : `Kelembapan tinggi (${day.humidity}%)`,
-      ],
-      [2, cell.gambut ? 1.1 : -0.35, cell.gambut ? "Lahan gambut" : "Tanah mineral, bukan gambut"],
-      [
-        3,
-        (hs > 0 ? 0.55 * Math.log(1 + hs) - 0.2 : -0.3) * hsWeight,
-        hs > 0 ? `${hs} hotspot dalam radius 10 km (7 hari terakhir)` : "Tidak ada hotspot dalam radius 10 km",
-      ],
-      [
-        4,
-        -2.5 * (cell.ndvi - 0.5),
-        cell.ndvi < 0.5 ? `Vegetasi kering (NDVI ${decimal(cell.ndvi)})` : `Vegetasi rapat (NDVI ${decimal(cell.ndvi)})`,
-      ],
-    ];
-    const logit = -2.2 + contributions.reduce((sum, c) => sum + c[1], 0) + cellNoise[i] + gaussian(0, 0.08);
-    scores.push(round(1 / (1 + Math.exp(-logit)), 3));
-    factors.push(
-      contributions
-        .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
-        .slice(0, 3)
-        .map(([f, k, label]) => [f, round(k, 3), label]),
-    );
-  });
-  risk.scores.push(scores);
-  risk.factors.push(factors);
+  risk.cuaca.push(forecast.map((list) => [list[t + 1].dry, list[t + 1].humidity]));
+  risk.scores.push(
+    cells.map((cell, i) => {
+      const day = forecast[cell.kab][t + 1];
+      const values = contributionValues({
+        dry: day.dry,
+        humidity: day.humidity,
+        gambut: cell.gambut,
+        hotspots: nearbyCounts[i],
+        ndvi: cell.ndvi,
+        dayOffset: t,
+      });
+      const logit = RISK_INTERCEPT + values.reduce((sum, v) => sum + v, 0) + cellNoise[i] + gaussian(0, 0.08);
+      return Math.round(1000 / (1 + Math.exp(-logit)));
+    }),
+  );
 });
 
 // ---------------------------------------------------------------------------
 // Write files
 
+const kabSlugs = kabs.map((k) => k.slug);
+const kabProvinces = kabs.map((k) => k.provinsi);
+
 const grid: MockGrid = {
   cell_size: CELL,
   origin: ORIGIN,
-  kabupaten: REGION_SEEDS.map((s) => s.slug),
-  cells: cells.map((c) => [c.row, c.col, c.region, c.gambut ? 1 : 0]),
+  kabupaten: kabSlugs,
+  provinsi: kabProvinces,
+  cells: cells.map((c, i) => [c.row, c.col, c.kab, c.gambut ? 1 : 0, Math.round(c.ndvi * 100), nearbyCounts[i]]),
 };
 
 const hotspotFile: MockHotspots = {
-  kabupaten: REGION_SEEDS.map((s) => s.slug),
+  start: START_DATE,
+  kabupaten: kabSlugs,
+  provinsi: kabProvinces,
   satelit: [...SATELLITES],
   confidence: [...CONFIDENCES],
-  rows: hotspots.map((h) => [h.pos[0], h.pos[1], `${h.date}T${h.time}`, h.sat, h.conf, h.frp, h.region]),
+  days: days.map((list) => list.map((h) => [h.pos[0], h.pos[1], h.hhmm, h.sat, h.conf, h.frp, h.kab])),
 };
 
 const status = {
@@ -597,7 +656,6 @@ const write = (name: string, data: unknown) => {
 };
 
 const sizes = {
-  "regions.geojson": write("regions.geojson", { type: "FeatureCollection", features: regionFeatures }),
   "grid.json": write("grid.json", grid),
   "hotspots.json": write("hotspots.json", hotspotFile),
   "clusters.geojson": write("clusters.geojson", { type: "FeatureCollection", features: clusterFeatures }),
@@ -610,24 +668,33 @@ const sizes = {
 // Summary
 
 const levelCounts = risk.scores[0].reduce<Record<string, number>>((acc, s) => {
-  const level = getRiskLevel(s);
+  const level = getRiskLevel(s / 1000);
   acc[level] = (acc[level] ?? 0) + 1;
   return acc;
 }, {});
+const latestByProvince = new Map<string, number>();
+for (const h of latest) latestByProvince.set(kabs[h.kab].provinsi, (latestByProvince.get(kabs[h.kab].provinsi) ?? 0) + 1);
 
-console.log(`Rentang data   : ${START_DATE} s.d. ${END_DATE}`);
-console.log(`Kotak grid     : ${cells.length} (gambut ${peatCells.length})`);
-console.log(`Hotspot        : ${hotspots.length} (hari terakhir ${latestHotspots.length})`);
-console.log(`Cluster        : ${clusterFeatures.length} – ${clusterFeatures.map((c) => c.properties.status).join(", ")}`);
-console.log(`Level risiko H+1: ${JSON.stringify(levelCounts)}`);
+console.log(`Rentang data    : ${START_DATE} s.d. ${END_DATE}`);
+console.log(`Kotak grid      : ${cells.length} (gambut ${peatCount})`);
+console.log(`Hotspot         : ${totalHotspots} (hari terakhir ${latest.length})`);
 console.log(
-  "Luas wilayah   :",
-  REGION_SEEDS.map((seed, i) => `${seed.slug} ${Math.round(ringAreaKm2(regionRings[i]))} km²`).join(", "),
+  `Hari terakhir   : ${[...latestByProvince.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([p, n]) => `${p} ${n}`)
+    .join(", ")}`,
 );
+console.log(`Zona            : ${clusterFeatures.length}`);
+console.log(`Level risiko H+1: ${JSON.stringify(levelCounts)}`);
+const monthly = new Map<string, number>();
+days.forEach((list, d) => {
+  const key = addDaysIso(START_DATE, d).slice(0, 7);
+  monthly.set(key, (monthly.get(key) ?? 0) + list.length);
+});
+console.log(`Per bulan       : ${[...monthly.entries()].map(([m, n]) => `${m}=${n}`).join(" ")}`);
 let totalSize = 0;
 for (const [name, size] of Object.entries(sizes)) {
   totalSize += size;
   console.log(`  mock/${name.padEnd(17)} ${(size / 1024).toFixed(0).padStart(6)} KB`);
 }
-console.log(`  total                   ${(totalSize / 1024 / 1024).toFixed(2)} MB`);
-console.log(`Hari terakhir: ${[...dailyCounts.entries()].slice(-7).map(([d, n]) => `${d.slice(5)}=${n}`).join(" ")}`);
+console.log(`  total (tanpa batas wilayah) ${(totalSize / 1024 / 1024).toFixed(2)} MB`);

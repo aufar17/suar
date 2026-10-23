@@ -14,7 +14,13 @@ import {
 } from "@/components/ui/drawer";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { diffDaysIso, formatDate, formatDateTime, formatDecimal, formatInteger } from "@/lib/format";
-import { CLUSTER_STATUS_DESCRIPTIONS, CLUSTER_STATUS_LABELS, CONFIDENCE_LABELS, SATELLITE_LABELS } from "@/lib/labels";
+import {
+  CLUSTER_STATUS_DESCRIPTIONS,
+  CLUSTER_STATUS_LABELS,
+  CONFIDENCE_LABELS,
+  regionHref,
+  SATELLITE_LABELS,
+} from "@/lib/labels";
 import { cn } from "@/lib/utils";
 import type { ClusterFeature, ClusterStatus, HotspotFeature } from "@/types";
 
@@ -102,10 +108,10 @@ export function InfoGrid({ items, className }: { items: InfoTile[]; className?: 
   );
 }
 
-export function RegionLink({ slug, name }: { slug: string; name: string }) {
+export function RegionLink({ href, name }: { href: string; name: string }) {
   return (
     <Button asChild size="lg" className="w-full">
-      <Link href={`/wilayah/${slug}`}>
+      <Link href={href}>
         Buka halaman {name}
         <ArrowRight />
       </Link>
@@ -149,7 +155,7 @@ export function ClusterDetail({ feature, regionName }: { feature: ClusterFeature
           { icon: CalendarClock, label: "Tanggal data", value: formatDate(p.tanggal) },
         ]}
       />
-      <RegionLink slug={p.kabupaten} name={regionName} />
+      <RegionLink href={regionHref({ slug: p.kabupaten, provinsi: p.provinsi })} name={regionName} />
     </div>
   );
 }
@@ -179,7 +185,7 @@ export function HotspotDetail({ feature, regionName }: { feature: HotspotFeature
       <p className="text-xs text-muted-foreground">
         Hotspot adalah titik panas dari satelit, belum tentu kebakaran yang terkonfirmasi di lapangan.
       </p>
-      <RegionLink slug={p.kabupaten} name={regionName} />
+      <RegionLink href={regionHref({ slug: p.kabupaten, provinsi: p.provinsi })} name={regionName} />
     </div>
   );
 }

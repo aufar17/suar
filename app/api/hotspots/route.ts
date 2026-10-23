@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { badRequest, bboxParam, confidenceParam, dateParam, jsonResponse, parseSearchParams } from "@/lib/api";
+import { areaParams, badRequest, confidenceParam, dateParam, jsonResponse, parseSearchParams, validateArea } from "@/lib/api";
 import { getDataStatus, getHotspots } from "@/lib/data";
 import { diffDaysIso } from "@/lib/format";
 
@@ -9,13 +9,13 @@ const querySchema = z.object({
   start: dateParam.optional(),
   end: dateParam.optional(),
   min_confidence: confidenceParam.default("low"),
-  bbox: bboxParam.optional(),
+  ...areaParams,
 });
 
 export async function GET(request: Request) {
   const parsed = parseSearchParams(request, querySchema);
   if (!parsed.ok) return parsed.response;
-  const { min_confidence, bbox } = parsed.data;
+  const { min_confidence, bbox, provinsi, kabupaten } = parsed.data;
 
   const status = await getDataStatus();
   const end = parsed.data.end ?? parsed.data.start ?? status.tanggal_data;
@@ -29,6 +29,8 @@ export async function GET(request: Request) {
       { parameter: "end", pesan: `Rentang tanggal maksimal ${MAX_RANGE_DAYS} hari per permintaan` },
     ]);
   }
+  const invalid = await validateArea({ provinsi, kabupaten });
+  if (invalid) return invalid;
 
-  return jsonResponse(await getHotspots({ start, end, minConfidence: min_confidence, bbox }));
+  return jsonResponse(await getHotspots({ start, end, minConfidence: min_confidence, bbox, provinsi, kabupaten }));
 }

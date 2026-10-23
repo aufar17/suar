@@ -7,7 +7,7 @@ import type L from "leaflet";
 import type { ReactNode } from "react";
 import { MapContainer, Pane, TileLayer } from "react-leaflet";
 import type { Theme } from "@/components/ui/theme";
-import { RIAU_BBOX } from "@/lib/geo";
+import { INDONESIA_BBOX } from "@/lib/geo";
 import type { BBox } from "@/types";
 import { bboxToBounds } from "./bounds";
 
@@ -31,7 +31,7 @@ const ATTRIBUTION =
 
 export interface MapViewProps {
   children?: ReactNode;
-  /** Initial extent; defaults to the whole province. */
+  /** Initial extent; defaults to the whole country. */
   bbox?: BBox;
   /** Accessible description of the map. */
   label: string;
@@ -43,7 +43,7 @@ export interface MapViewProps {
 }
 
 /** Base map: theme-matched tiles and one canvas renderer for many vector features. */
-export function MapView({ children, bbox = RIAU_BBOX, label, theme, onReady, fitPadding = { padding: [8, 8] } }: MapViewProps) {
+export function MapView({ children, bbox = INDONESIA_BBOX, label, theme, onReady, fitPadding = { padding: [8, 8] } }: MapViewProps) {
   return (
     <div role="region" aria-label={label} className="h-full w-full">
       <MapContainer

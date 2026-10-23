@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getDataStatus, getRegions } from "@/lib/data";
+import { getDataStatus } from "@/lib/data";
 import { CommandMenu } from "./command-menu";
 import { DataStatusBadge } from "./data-status-badge";
 import { LogoMark } from "./logo";
@@ -8,7 +8,7 @@ import { NavLinks } from "./nav-links";
 import { ThemeToggle } from "./theme";
 
 export async function SiteHeader() {
-  const [status, regions] = await Promise.all([getDataStatus(), getRegions()]);
+  const status = await getDataStatus();
   return (
     <header className="sticky top-0 z-40 h-(--header-h) border-b bg-background/80 backdrop-blur-xl backdrop-saturate-150">
       <div className="flex h-full items-center gap-2 px-3 sm:px-4 lg:px-6">
@@ -29,7 +29,7 @@ export async function SiteHeader() {
 
         <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
           <DataStatusBadge status={status} className="hidden md:inline-flex" />
-          <CommandMenu regions={regions} />
+          <CommandMenu />
           <ThemeToggle />
           <MobileNav footer={<DataStatusBadge status={status} detailed />} />
         </div>

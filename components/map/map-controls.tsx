@@ -5,7 +5,7 @@ import { Locate, Minus, Plus } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { RIAU_BBOX } from "@/lib/geo";
+import { INDONESIA_BBOX } from "@/lib/geo";
 import { prefersReducedMotion } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
 import type { BBox } from "@/types";
@@ -42,14 +42,14 @@ function ControlButton({
 }
 
 /**
- * Zoom and "back to Riau" buttons. Rendered outside the Leaflet container so they are
+ * Zoom and "back to the whole country" buttons. Rendered outside the Leaflet container so they are
  * regular, keyboard-focusable buttons; the map itself also pans with arrow keys and
  * zooms with +/− once focused.
  */
 export function MapControls({
   map,
-  home = RIAU_BBOX,
-  homeLabel = "Kembali ke Provinsi Riau",
+  home = INDONESIA_BBOX,
+  homeLabel = "Kembali ke seluruh Indonesia",
   padding = { padding: [8, 8] },
   className,
 }: {

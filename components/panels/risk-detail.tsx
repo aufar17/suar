@@ -5,7 +5,7 @@ import { motion } from "motion/react";
 import { CountUp } from "@/components/ui/count-up";
 import { RiskBadge } from "@/components/ui/risk-badge";
 import { formatDate, formatDayShort, formatDecimal, formatInteger, formatSigned } from "@/lib/format";
-import { FACTOR_LABELS } from "@/lib/labels";
+import { FACTOR_LABELS, regionHref } from "@/lib/labels";
 import { getRiskLabel, RISK_THRESHOLDS } from "@/lib/risk";
 import { cn } from "@/lib/utils";
 import type { RiskCellFeature, RiskFactor, RiskLevel, WeatherSnapshot } from "@/types";
@@ -166,7 +166,7 @@ export function CellDetail({
       </section>
 
       <div className="flex flex-col gap-3">
-        <RegionLink slug={p.kabupaten} name={regionName} />
+        <RegionLink href={regionHref({ slug: p.kabupaten, provinsi: p.provinsi })} name={regionName} />
         <PredictionNote />
       </div>
     </div>

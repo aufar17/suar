@@ -7,15 +7,17 @@ import {
   dataStatusSchema,
   hotspotCollectionSchema,
   monthlyTrendSchema,
+  provinceLineCollectionSchema,
   regionBoundaryCollectionSchema,
   regionDetailSchema,
   regionSchema,
   regionStatSchema,
+  regionWeatherSchema,
   riskCellCollectionSchema,
   weatherSnapshotSchema,
   type BBox,
 } from "@/types";
-import type { DataSource } from "./types";
+import type { AreaFilter, DataSource } from "./types";
 
 // Contract of every RPC, view, and table used here: docs/supabase-rpc.md
 
@@ -39,6 +41,11 @@ function bboxArgs(bbox: BBox | undefined) {
   return { min_lon, min_lat, max_lon, max_lat };
 }
 
+/** Bbox plus province/regency filters; `null` means "no filter". */
+function areaArgs({ bbox, provinsi, kabupaten }: AreaFilter) {
+  return { ...bboxArgs(bbox), provinsi_slug: provinsi ?? null, kabupaten_slug: kabupaten ?? null };
+}
+
 /** Validates a Supabase response with the same zod schema used for the mock data. */
 function parse<S extends z.ZodType>(schema: S, data: unknown, source: string): z.output<S> {
   const result = schema.safeParse(data);
@@ -56,29 +63,33 @@ async function rpc<S extends z.ZodType>(fn: string, args: Record<string, unknown
 }
 
 export const supabaseDataSource: DataSource = {
-  getHotspots: ({ start, end, minConfidence, bbox }) =>
+  getHotspots: ({ start, end, minConfidence, ...area }) =>
     rpc(
       "get_hotspots",
-      { start_date: start, end_date: end, min_confidence: minConfidence, ...bboxArgs(bbox) },
+      { start_date: start, end_date: end, min_confidence: minConfidence, ...areaArgs(area) },
       hotspotCollectionSchema,
     ),
 
-  getClusters: ({ date }) => rpc("get_clusters", { target_date: date }, clusterCollectionSchema),
+  getClusters: ({ date, ...area }) =>
+    rpc("get_clusters", { target_date: date, ...areaArgs(area) }, clusterCollectionSchema),
 
-  getRiskCells: ({ targetDate, bbox }) =>
-    rpc("get_risk_cells", { target_date: targetDate, ...bboxArgs(bbox) }, riskCellCollectionSchema),
+  getRiskCells: ({ targetDate, ...area }) =>
+    rpc("get_risk_cells", { target_date: targetDate, ...areaArgs(area) }, riskCellCollectionSchema),
 
   async getRegions() {
-    const { data, error } = await supabase()
-      .from("regions")
-      .select("id, slug, nama, level")
-      .in("level", ["kabupaten", "kota"])
-      .order("nama");
+    const { data, error } = await supabase().from("regions").select("id, slug, nama, level, provinsi").order("nama");
     if (error) throw new Error(`Gagal membaca tabel regions: ${error.message}`);
     return parse(z.array(regionSchema), data, "tabel regions");
   },
 
-  getRegionBoundaries: () => rpc("get_region_boundaries", {}, regionBoundaryCollectionSchema),
+  getRegionBoundaries: ({ level, provinsi }) =>
+    rpc(
+      "get_region_boundaries",
+      { boundary_level: level, provinsi_slug: provinsi ?? null },
+      regionBoundaryCollectionSchema,
+    ),
+
+  getProvinceLines: () => rpc("get_province_lines", {}, provinceLineCollectionSchema),
 
   getRegionDetail: (slug) => rpc("get_region_detail", { region_slug: slug }, regionDetailSchema.nullable()),
 
@@ -92,6 +103,19 @@ export const supabaseDataSource: DataSource = {
     return parse(weatherSnapshotSchema.nullable(), data, "view weather_latest");
   },
 
+  async getWeatherList(provinsi) {
+    let query = supabase()
+      .from("weather_latest")
+      .select("slug, nama, provinsi, tanggal, suhu_c, kelembapan_persen, curah_hujan_mm, kecepatan_angin_kmh, hari_tanpa_hujan")
+      .neq("level", "provinsi")
+      .order("nama");
+    if (provinsi) query = query.eq("provinsi", provinsi);
+    const { data, error } = await query;
+    if (error) throw new Error(`Gagal membaca view weather_latest: ${error.message}`);
+    const rows = (data ?? []).map(({ slug, nama, provinsi: parent, ...cuaca }) => ({ slug, nama, provinsi: parent, cuaca }));
+    return parse(z.array(regionWeatherSchema), rows, "view weather_latest");
+  },
+
   getMonthlyTrend: ({ start, end, slug }) =>
     rpc(
       "get_monthly_trend",
@@ -99,10 +123,17 @@ export const supabaseDataSource: DataSource = {
       z.array(monthlyTrendSchema),
     ),
 
-  getRegionStats: ({ date, start, end }) =>
+  getRegionStats: ({ date, start, end, level, provinsi, minConfidence }) =>
     rpc(
       "get_region_stats",
-      { target_date: date, start_date: start ?? null, end_date: end ?? null },
+      {
+        target_date: date,
+        start_date: start ?? null,
+        end_date: end ?? null,
+        boundary_level: level,
+        provinsi_slug: provinsi ?? null,
+        min_confidence: minConfidence ?? "low",
+      },
       z.array(regionStatSchema),
     ),
 

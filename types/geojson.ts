@@ -20,9 +20,15 @@ export const multiPolygonSchema = z.object({
   coordinates: z.array(z.array(z.array(positionSchema))),
 });
 
+export const multiLineStringSchema = z.object({
+  type: z.literal("MultiLineString"),
+  coordinates: z.array(z.array(positionSchema)),
+});
+
 export type PointGeometry = z.infer<typeof pointSchema>;
 export type PolygonGeometry = z.infer<typeof polygonSchema>;
 export type MultiPolygonGeometry = z.infer<typeof multiPolygonSchema>;
+export type MultiLineStringGeometry = z.infer<typeof multiLineStringSchema>;
 
 export function featureSchema<G extends z.ZodType, P extends z.ZodType>(
   geometry: G,
@@ -54,4 +60,5 @@ export interface FeatureCollection<F> {
 }
 
 /** [minLon, minLat, maxLon, maxLat] */
+export const bboxSchema = z.tuple([z.number(), z.number(), z.number(), z.number()]);
 export type BBox = [number, number, number, number];

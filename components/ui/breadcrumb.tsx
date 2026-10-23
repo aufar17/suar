@@ -6,7 +6,7 @@ export function Breadcrumb({ items }: { items: { label: string; href?: string }[
     <nav aria-label="Breadcrumb">
       <ol className="flex flex-wrap items-center gap-0.5 text-sm text-muted-foreground">
         {items.map((item, index) => (
-          <li key={item.label} className="flex items-center gap-0.5">
+          <li key={`${index}-${item.label}`} className="flex items-center gap-0.5">
             {index > 0 ? <ChevronRight aria-hidden="true" className="size-3.5 opacity-60" /> : null}
             {item.href ? (
               <Link
