@@ -1,7 +1,7 @@
 "use client";
 
 import L from "leaflet";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useMap } from "react-leaflet";
 import type { Theme } from "@/components/ui/theme";
 import { pointInRing } from "@/lib/geo";
@@ -33,6 +33,7 @@ export function BoundaryLayer({
   showLabel = true,
   weight = WEIGHT.normal,
   orderKey = "batas",
+  emphasis = false,
 }: {
   data: RegionBoundaryCollection;
   theme: Theme;
@@ -42,13 +43,28 @@ export function BoundaryLayer({
   /** Line width of the outlines (provinces are drawn heavier than regencies). */
   weight?: number;
   orderKey?: OrderedLayer;
+  /** Legend hover: draw every outline heavier. */
+  emphasis?: boolean;
 }) {
   const map = useMap();
+  const groupRef = useRef<L.FeatureGroup | null>(null);
+  const emphasizedRef = useRef(false);
+
+  useEffect(() => {
+    const group = groupRef.current;
+    if (!group || (!emphasis && !emphasizedRef.current)) return;
+    emphasizedRef.current = emphasis;
+    group.eachLayer((layer) =>
+      (layer as L.Path).setStyle(emphasis ? { weight: weight * 2.2, opacity: 1 } : { weight, opacity: OPACITY.normal }),
+    );
+  }, [emphasis, weight]);
 
   useEffect(() => {
     const color = boundaryColor(theme);
     const normal = weight;
     const group = L.featureGroup();
+    groupRef.current = group;
+    emphasizedRef.current = false;
     const regions = data.features.map((feature) => {
       const rings = outerRings(feature.geometry);
       const strong = feature.properties.slug === emphasize;
@@ -100,6 +116,7 @@ export function BoundaryLayer({
     const cancel = fadeInPaths(group.getLayers() as L.Path[], base);
     return () => {
       cancel();
+      if (groupRef.current === group) groupRef.current = null;
       map.off("mousemove", onMove);
       map.off("mouseout", onOut);
       tooltip.remove();

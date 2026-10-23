@@ -28,13 +28,15 @@ import { Button } from "@/components/ui/button";
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { addDaysIso, formatDayShort, formatDecimal, formatInteger } from "@/lib/format";
-import { INDONESIA_MAX_BBOX, limitBBox, pointInGeometry } from "@/lib/geo";
+import { bboxIntersects, INDONESIA_MAX_BBOX, limitBBox, pointInBBox, pointInGeometry, ringBBox } from "@/lib/geo";
 import { regionDisplayName, regionHref } from "@/lib/labels";
 import { getRiskLabel, getRiskLevel } from "@/lib/risk";
 import { prefetchJson, useJson } from "@/lib/use-json";
 import { prefersReducedMotion, useIsDesktop, useMediaQuery } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
 import {
+  CLUSTER_STATUSES,
+  CONFIDENCE_LEVELS,
   isHotspotGroup,
   type ClusterCollection,
   type DataStatus,
@@ -50,13 +52,14 @@ import {
   type RegionStat,
   type RegionWeather,
   type RiskCellCollection,
+  type RiskLevel,
 } from "@/types";
 import { bboxToBounds } from "./bounds";
 import type { MapTier } from "./dashboard-map";
 import { FOCUS_REGION_EVENT } from "./focus-region";
 import { BoundaryGlyph, HotspotGlyph, PeatGlyph, RiskGlyph, ZoneGlyph } from "./legend-icons";
 import { MapControls } from "./map-controls";
-import { MapLegend } from "./map-legend";
+import { MapLegend, MapLegendDrawer, type LegendCounts, type LegendHighlight, type LegendProps } from "./map-legend";
 import { MapSkeleton } from "./map-skeleton";
 import { MapStatus, type MapStatusItem } from "./map-status";
 import { regionShape, type MapSelection, type SelectedFeature } from "./selection";
@@ -118,6 +121,8 @@ export function MapDashboard({ status }: { status: DataStatus }) {
   const summaryVisible = summaryOpen ?? wide;
   const [controlsOpen, setControlsOpen] = useState(false);
   const [playRequested, setPlayRequested] = useState(false);
+  const [onlyLevel, setOnlyLevel] = useState<RiskLevel | null>(null);
+  const [legendHighlight, setLegendHighlight] = useState<LegendHighlight | null>(null);
 
   const viewport = useMapViewport(map);
   const zoom = viewport?.zoom ?? 5;
@@ -166,6 +171,7 @@ export function MapDashboard({ status }: { status: DataStatus }) {
   );
   const gridBBox = near && viewport ? limitBBox(snapBBox(viewport.bbox, 0.5, 0.1), MAX_GRID_AREA).join(",") : null;
   const risk = useJson<RiskCellCollection>(gridBBox ? riskUrl(targetDate, gridBBox) : null);
+  const riskData = near ? risk.data : undefined;
 
   const { groupFeatures, singles } = useMemo(() => {
     const groupFeatures: HotspotGroupFeature[] = [];
@@ -437,6 +443,58 @@ export function MapDashboard({ status }: { status: DataStatus }) {
 
   const visibleLayers = filters.lapisan.filter((key) => LAYERS.some((layer) => layer.key === key));
 
+  // Legend counts: objects inside the current view.
+  const legendCounts = useMemo((): LegendCounts | undefined => {
+    if (!viewport) return undefined;
+    const view = viewport.bbox;
+    const zeroLevels = (): Record<RiskLevel, number> => ({ rendah: 0, sedang: 0, tinggi: 0, sangat_tinggi: 0 });
+    const risk = zeroLevels();
+    if (near) {
+      for (const f of riskData?.features ?? []) {
+        if (bboxIntersects(ringBBox(f.geometry.coordinates[0]), view)) risk[f.properties.level_risiko]++;
+      }
+    } else {
+      const stats = tier === "provinsi" ? provinceStats.data : regencyStats.data;
+      for (const s of stats ?? []) {
+        const item = indexBySlug?.[s.slug];
+        if (item && bboxIntersects(item.bbox, view)) risk[getRiskLevel(s.rata_skor_risiko)]++;
+      }
+    }
+    const byConfidence = Object.fromEntries(CONFIDENCE_LEVELS.map((c) => [c, 0])) as Record<(typeof CONFIDENCE_LEVELS)[number], number>;
+    let total = 0;
+    for (const f of singles) {
+      if (!pointInBBox(f.geometry.coordinates, view)) continue;
+      byConfidence[f.properties.confidence]++;
+      total++;
+    }
+    let groupCount = 0;
+    for (const g of groupFeatures) {
+      if (!pointInBBox(g.geometry.coordinates, view)) continue;
+      groupCount++;
+      total += g.properties.jumlah;
+    }
+    const zones = Object.fromEntries(CLUSTER_STATUSES.map((s) => [s, 0])) as Record<(typeof CLUSTER_STATUSES)[number], number>;
+    for (const f of clusters.data?.features ?? []) {
+      if (f.geometry.coordinates[0].some((p) => pointInBBox(p, view))) zones[f.properties.status]++;
+    }
+    const peat = (riskData?.features ?? []).filter(
+      (f) => f.properties.is_gambut && pointInBBox(f.geometry.coordinates[0][0], view),
+    ).length;
+    return { risk, hotspots: { total, byConfidence, groups: groupCount }, zones, peat };
+  }, [viewport, near, tier, riskData, provinceStats.data, regencyStats.data, indexBySlug, singles, groupFeatures, clusters.data]);
+
+  const legendProps: LegendProps = {
+    layers: visibleLayers,
+    tier,
+    counts: legendCounts,
+    onlyLevel,
+    onOnlyLevelChange: setOnlyLevel,
+    onHighlight: setLegendHighlight,
+    dataDate: status.tanggal_data,
+    rangeLabel: RANGE_LABELS[filters.rentang],
+    mock: status.sumber === "mock",
+  };
+
   const controls = (
     <FilterControls
       filters={filters}
@@ -496,12 +554,14 @@ export function MapDashboard({ status }: { status: DataStatus }) {
           hotspots={hotspotLayer}
           groups={groupFeatures}
           clusters={clusters.data}
-          risk={near ? risk.data : undefined}
+          risk={riskData}
           riskOpacity={riskOpacity}
           regionNames={regionNames}
           selected={selected}
           focus={focusShape}
           focusSlug={filters.wilayah}
+          onlyLevel={riskOn ? onlyLevel : null}
+          highlight={legendHighlight}
           fitPadding={fitPadding}
           onReady={setMap}
           onSelectCluster={(feature) => setSelection({ kind: "cluster", id: feature.properties.id })}
@@ -554,7 +614,7 @@ export function MapDashboard({ status }: { status: DataStatus }) {
             </motion.div>
           )}
         </AnimatePresence>
-        <MapLegend layers={visibleLayers} defaultOpen className="pointer-events-auto mt-auto shrink-0" />
+        <MapLegend {...legendProps} defaultOpen className="pointer-events-auto mt-auto min-h-0 shrink" />
       </div>
 
       {/* Desktop: summary on the right (collapsible). */}
@@ -686,12 +746,10 @@ export function MapDashboard({ status }: { status: DataStatus }) {
         )}
       />
 
-      {/* Mobile legend sits above the timeline. */}
-      <MapLegend
-        layers={visibleLayers}
-        defaultOpen={false}
-        className={cn("absolute left-3 z-[500] w-auto max-w-[min(15rem,calc(100%-1.5rem))] lg:hidden", riskOn ? "bottom-[8.5rem]" : "bottom-3")}
-      />
+      {/* Mobile: the legend opens in a drawer from a button above the timeline. */}
+      <div className={cn("absolute left-3 z-[500] lg:hidden", riskOn ? "bottom-[8.5rem]" : "bottom-3")}>
+        <MapLegendDrawer {...legendProps} />
+      </div>
 
       <AnimatePresence>
         {riskOn ? (

@@ -10,13 +10,8 @@ import type { Confidence, HotspotCollection, HotspotFeature } from "@/types";
 import { fadeInPaths, fadeOutAndRemove } from "./animate";
 import { attachHoverTooltip, tooltipHtml } from "./hover";
 import { addOrderedLayer, removeOrderedLayer } from "./layer-order";
+import { HOTSPOT_OPACITY, hotspotRadius } from "./styles";
 
-export const HOTSPOT_OPACITY: Record<Confidence, number> = { low: 0.5, nominal: 0.8, high: 1 };
-
-/** Marker radius in px, growing with Fire Radiative Power (MW). */
-export function hotspotRadius(frp: number): number {
-  return Math.min(12, Math.max(3.5, 3 + Math.sqrt(frp) * 0.9));
-}
 
 export function hotspotColors(theme: Theme) {
   return theme === "dark" ? { fill: "#FAFAFA", stroke: "#09090B" } : { fill: "#18181B", stroke: "#FFFFFF" };
@@ -29,28 +24,47 @@ export function HotspotLayer({
   data,
   regionNames,
   theme,
+  highlight = null,
   onSelect,
 }: {
   data: HotspotCollection;
   regionNames: Record<string, string>;
   theme: Theme;
+  /** Legend hover: emphasize hotspots of this confidence level. */
+  highlight?: Confidence | null;
   onSelect?: (feature: HotspotFeature) => void;
 }) {
   const map = useMap();
   const onSelectRef = useRef(onSelect);
   const namesRef = useRef(regionNames);
+  const highlightRef = useRef(highlight);
+  const groupRef = useRef<L.FeatureGroup | null>(null);
   useEffect(() => {
     onSelectRef.current = onSelect;
     namesRef.current = regionNames;
   });
 
+  const base = (path: L.Path) => {
+    const confidence = (path as HotspotMarker).hotspot.properties.confidence;
+    const current = highlightRef.current;
+    if (current && current !== confidence) return { opacity: 0.25, fillOpacity: 0.12 };
+    return { opacity: current ? 1 : 0.9, fillOpacity: current ? 1 : HOTSPOT_OPACITY[confidence] };
+  };
+  const baseRef = useRef(base);
+
+  useEffect(() => {
+    highlightRef.current = highlight;
+    for (const layer of groupRef.current?.getLayers() ?? []) {
+      const path = layer as HotspotMarker;
+      path.setStyle({ ...baseRef.current(path), weight: highlight && path.hotspot.properties.confidence === highlight ? 2 : 1 });
+    }
+  }, [highlight]);
+
   useEffect(() => {
     const colors = hotspotColors(theme);
     const group = L.featureGroup();
-    const base = (path: L.Path) => ({
-      opacity: 0.9,
-      fillOpacity: HOTSPOT_OPACITY[(path as HotspotMarker).hotspot.properties.confidence],
-    });
+    groupRef.current = group;
+    const base = baseRef.current;
     // Larger fires first so small markers stay clickable on top.
     const features = [...data.features].sort((a, b) => b.properties.frp - a.properties.frp);
     for (const feature of features) {
@@ -98,6 +112,7 @@ export function HotspotLayer({
     return () => {
       cancel();
       detach();
+      if (groupRef.current === group) groupRef.current = null;
       removeOrderedLayer(map, "hotspot", group, () => fadeOutAndRemove(group, base));
     };
   }, [map, data, theme]);

@@ -57,3 +57,42 @@ export function PeatGlyph() {
     </svg>
   );
 }
+
+/** Zone outline in the line style of one status (see ZONE_STYLES in cluster-layer.tsx). */
+export function ZoneStatusGlyph({ dashArray, weight, opacity }: { dashArray?: string; weight: number; opacity: number }) {
+  return (
+    <svg width="28" height="12" viewBox="0 0 28 12" aria-hidden="true">
+      <rect
+        x="2"
+        y="2"
+        width="24"
+        height="8"
+        rx="2"
+        fill="var(--map-cluster)"
+        fillOpacity="0.1"
+        stroke="var(--map-cluster)"
+        strokeOpacity={opacity}
+        strokeWidth={weight}
+        strokeDasharray={dashArray}
+      />
+    </svg>
+  );
+}
+
+/** Numbered hotspot group, as drawn on the map. */
+export function GroupGlyph({ label = "12" }: { label?: string }) {
+  return (
+    <span aria-hidden="true" className="hotspot-group !size-6 shrink-0 !animate-none !text-[10px]">
+      {label}
+    </span>
+  );
+}
+
+/** Boundary line of a given weight. */
+export function LineGlyph({ weight }: { weight: number }) {
+  return (
+    <svg width="28" height="12" viewBox="0 0 28 12" aria-hidden="true">
+      <path d="M2 8 9 4 16 7 26 3" fill="none" stroke="var(--map-boundary)" strokeWidth={weight} strokeLinejoin="round" />
+    </svg>
+  );
+}

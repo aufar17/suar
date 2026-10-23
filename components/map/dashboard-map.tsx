@@ -29,6 +29,7 @@ import { ProvinceLineLayer } from "./province-line-layer";
 import { RiskLayer } from "./risk-layer";
 import { selectionShape, type SelectedFeature, type SelectionShape } from "./selection";
 import { SelectionLayer } from "./selection-layer";
+import type { LegendHighlight } from "./map-legend";
 import type { LayerKey } from "./use-map-filters";
 
 /** What the map draws at the current zoom: provinces (≤ 6), regencies (7–8), or the 5 km grid (≥ 9). */
@@ -54,9 +55,10 @@ export interface DashboardMapProps {
   /** Outline of the focused province or regency. */
   focus: SelectionShape | null;
   focusSlug: string | null;
-  /** Legend: fill only regions/cells of this level, and outline the hovered level. */
+  /** Legend: fill only regions/cells of this level. */
   onlyLevel?: RiskLevel | null;
-  highlightLevel?: RiskLevel | null;
+  /** Legend item under the pointer: the matching objects are emphasized. */
+  highlight?: LegendHighlight | null;
   fitPadding?: L.FitBoundsOptions;
   onReady?: (map: L.Map) => void;
   onSelectCluster: (feature: ClusterFeature) => void;
@@ -85,7 +87,7 @@ export default function DashboardMap({
   focus,
   focusSlug,
   onlyLevel,
-  highlightLevel,
+  highlight = null,
   fitPadding,
   onReady,
   onSelectCluster,
@@ -97,6 +99,7 @@ export default function DashboardMap({
   const riskOn = layers.includes("risiko");
   const boundsOn = layers.includes("batas");
   const near = tier === "dekat";
+  const highlightLevel = highlight?.kind === "risiko" ? highlight.level : null;
 
   // Regions stay hoverable and clickable whenever the risk or boundary layer is on.
   const regions = tier === "provinsi" ? provinces : tier === "kabupaten" ? regencies : undefined;
@@ -130,26 +133,72 @@ export default function DashboardMap({
           onSelect={onSelectRegion}
         />
       ) : null}
-      {near && layers.includes("gambut") && risk ? <PeatLayer cells={risk} theme={theme} /> : null}
+      {near && layers.includes("gambut") && risk ? (
+        <PeatLayer cells={risk} theme={theme} emphasis={highlight?.kind === "gambut"} />
+      ) : null}
       {near && riskOn && riskCells ? (
-        <RiskLayer data={riskCells} opacity={riskOpacity} theme={theme} regionNames={regionNames} onSelect={onSelectCell} />
+        <RiskLayer
+          data={riskCells}
+          opacity={riskOpacity}
+          theme={theme}
+          regionNames={regionNames}
+          highlightLevel={highlightLevel}
+          onSelect={onSelectCell}
+        />
       ) : null}
       {boundsOn && tier === "provinsi" && provinces ? (
-        <BoundaryLayer data={provinces} theme={theme} weight={1.3} orderKey="batas-provinsi" showLabel={false} />
+        <BoundaryLayer
+          data={provinces}
+          theme={theme}
+          weight={1.3}
+          orderKey="batas-provinsi"
+          showLabel={false}
+          emphasis={highlight?.kind === "batas" && highlight.tier === "provinsi"}
+        />
       ) : null}
       {boundsOn && tier !== "provinsi" && regencies ? (
-        <BoundaryLayer data={regencies} theme={theme} weight={0.7} showLabel={near && !riskOn} />
+        <BoundaryLayer
+          data={regencies}
+          theme={theme}
+          weight={0.7}
+          showLabel={near && !riskOn}
+          emphasis={highlight?.kind === "batas" && highlight.tier === "kabupaten"}
+        />
       ) : null}
-      {boundsOn && tier !== "provinsi" && provinceLines ? <ProvinceLineLayer data={provinceLines} theme={theme} /> : null}
+      {boundsOn && tier !== "provinsi" && provinceLines ? (
+        <ProvinceLineLayer
+          data={provinceLines}
+          theme={theme}
+          emphasis={highlight?.kind === "batas" && highlight.tier === "provinsi"}
+        />
+      ) : null}
       {focus ? <SelectionLayer shape={focus} theme={theme} orderKey="fokus" /> : null}
       {layers.includes("zona") && clusters ? (
-        <ClusterLayer data={clusters} theme={theme} regionNames={regionNames} onSelect={onSelectCluster} />
+        <ClusterLayer
+          data={clusters}
+          theme={theme}
+          regionNames={regionNames}
+          highlight={highlight?.kind === "zona" ? highlight.status : null}
+          onSelect={onSelectCluster}
+        />
       ) : null}
       {selected ? <SelectionLayer shape={selectionShape(selected)} theme={theme} /> : null}
       {layers.includes("hotspot") && hotspots ? (
-        <HotspotLayer data={hotspots} regionNames={regionNames} theme={theme} onSelect={onSelectHotspot} />
+        <HotspotLayer
+          data={hotspots}
+          regionNames={regionNames}
+          theme={theme}
+          highlight={highlight?.kind === "kepercayaan" ? highlight.level : null}
+          onSelect={onSelectHotspot}
+        />
       ) : null}
-      {layers.includes("hotspot") && !near && groups.length > 0 ? <HotspotGroupLayer groups={groups} /> : null}
+      {layers.includes("hotspot") && !near && groups.length > 0 ? (
+        <HotspotGroupLayer
+          groups={groups}
+          emphasis={highlight?.kind === "kelompok"}
+          dimmed={highlight?.kind === "kepercayaan"}
+        />
+      ) : null}
     </MapView>
   );
 }

@@ -83,6 +83,8 @@ export function RegionMapPanel({
       <MapControls map={map} home={bbox} homeLabel={`Kembali ke ${name}`} className="absolute top-3 right-3 z-[500]" />
       <MapLegend
         layers={["risiko", "hotspot", "batas"]}
+        tier={kind === "provinsi" ? "kabupaten" : "dekat"}
+        rangeLabel="7 hari"
         defaultOpen={false}
         className="absolute bottom-12 left-3 z-[500] w-56 sm:bottom-3"
       />

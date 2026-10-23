@@ -6,10 +6,11 @@ import { useMap } from "react-leaflet";
 import type { Theme } from "@/components/ui/theme";
 import { formatDecimal, formatInteger } from "@/lib/format";
 import { CLUSTER_STATUS_LABELS } from "@/lib/labels";
-import type { ClusterCollection, ClusterFeature } from "@/types";
+import type { ClusterCollection, ClusterFeature, ClusterStatus } from "@/types";
 import { fadeInPaths, fadeOutAndRemove } from "./animate";
 import { attachHoverTooltip, escapeHtml, tooltipHtml } from "./hover";
 import { addOrderedLayer, removeOrderedLayer } from "./layer-order";
+import { ZONE_STYLES } from "./styles";
 
 export function clusterColor(theme: Theme) {
   return theme === "dark" ? "#FAFAFA" : "#18181B";
@@ -17,21 +18,41 @@ export function clusterColor(theme: Theme) {
 
 type ZonePolygon = L.Polygon & { zone: ClusterFeature };
 
-const BASE = { opacity: 1, fillOpacity: 0.1 };
+const FILL = 0.1;
 
 /** Fire zones: dashed outline with a faint fill. */
 export function ClusterLayer({
   data,
   theme,
   regionNames,
+  highlight = null,
   onSelect,
 }: {
   data: ClusterCollection;
   theme: Theme;
   regionNames: Record<string, string>;
+  /** Legend hover: emphasize zones of this status. */
+  highlight?: ClusterStatus | null;
   onSelect: (feature: ClusterFeature) => void;
 }) {
   const map = useMap();
+  const highlightRef = useRef(highlight);
+  const groupRef = useRef<L.FeatureGroup | null>(null);
+  const base = (path: L.Path) => {
+    const status = (path as ZonePolygon).zone.properties.status;
+    const current = highlightRef.current;
+    const dimmed = current !== null && current !== status;
+    return { opacity: dimmed ? 0.25 : ZONE_STYLES[status].opacity, fillOpacity: dimmed ? 0.03 : current ? 0.24 : FILL };
+  };
+  const baseRef = useRef(base);
+  useEffect(() => {
+    highlightRef.current = highlight;
+    for (const layer of groupRef.current?.getLayers() ?? []) {
+      const path = layer as ZonePolygon;
+      const style = ZONE_STYLES[path.zone.properties.status];
+      path.setStyle({ ...baseRef.current(path), weight: highlight === path.zone.properties.status ? style.weight + 1 : style.weight });
+    }
+  }, [highlight]);
   // Keep the latest callbacks without rebuilding the layer on every render.
   const onSelectRef = useRef(onSelect);
   const namesRef = useRef(regionNames);
@@ -43,12 +64,15 @@ export function ClusterLayer({
   useEffect(() => {
     const color = clusterColor(theme);
     const group = L.featureGroup();
+    groupRef.current = group;
+    const base = baseRef.current;
     for (const feature of data.features) {
       const ring = feature.geometry.coordinates[0].map(([lon, lat]) => L.latLng(lat, lon));
+      const style = ZONE_STYLES[feature.properties.status];
       const polygon = L.polygon(ring, {
         color,
-        weight: 1.8,
-        dashArray: "6 4",
+        weight: style.weight,
+        dashArray: style.dashArray,
         fillColor: color,
         opacity: 0,
         fillOpacity: 0,
@@ -76,18 +100,19 @@ export function ClusterLayer({
         );
       },
       (polygon) => {
-        hovered?.setStyle({ fillOpacity: BASE.fillOpacity, weight: 1.8 });
+        if (hovered) hovered.setStyle({ ...base(hovered), weight: ZONE_STYLES[hovered.zone.properties.status].weight });
         hovered = polygon;
-        hovered?.setStyle({ fillOpacity: 0.22, weight: 2.4 });
+        hovered?.setStyle({ fillOpacity: 0.22, weight: ZONE_STYLES[polygon!.zone.properties.status].weight + 0.6 });
       },
     );
 
     addOrderedLayer(map, "zona", group);
-    const cancel = fadeInPaths(group.getLayers() as L.Path[], () => BASE);
+    const cancel = fadeInPaths(group.getLayers() as L.Path[], base);
     return () => {
       cancel();
       detach();
-      removeOrderedLayer(map, "zona", group, () => fadeOutAndRemove(group, () => BASE));
+      if (groupRef.current === group) groupRef.current = null;
+      removeOrderedLayer(map, "zona", group, () => fadeOutAndRemove(group, base));
     };
   }, [map, data, theme]);
 

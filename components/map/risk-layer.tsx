@@ -6,7 +6,7 @@ import { useMap } from "react-leaflet";
 import type { Theme } from "@/components/ui/theme";
 import { formatDecimal } from "@/lib/format";
 import { getRiskColor, getRiskLabel } from "@/lib/risk";
-import type { RiskCellCollection, RiskCellFeature } from "@/types";
+import type { RiskCellCollection, RiskCellFeature, RiskLevel } from "@/types";
 import { fadeOutAndRemove, mixHex, tween } from "./animate";
 import { attachHoverTooltip, escapeHtml, swatchHtml, tooltipHtml } from "./hover";
 import { addOrderedLayer, removeOrderedLayer } from "./layer-order";
@@ -40,11 +40,14 @@ export function RiskLayer({
   opacity,
   theme,
   regionNames,
+  highlightLevel = null,
   onSelect,
 }: {
   data: RiskCellCollection;
   opacity: number;
   theme: Theme;
+  /** Legend hover: outline the cells of this level. */
+  highlightLevel?: RiskLevel | null;
   regionNames?: Record<string, string>;
   /** Omit to draw a read-only grid. */
   onSelect?: (feature: RiskCellFeature) => void;
@@ -172,6 +175,15 @@ export function RiskLayer({
       }
     });
   }, [data, theme, interactive]);
+
+  // Legend hover outlines one level (and is restored when the hover ends).
+  useEffect(() => {
+    const color = theme === "dark" ? "#FAFAFA" : "#18181B";
+    for (const cell of cellsRef.current.values()) {
+      const match = highlightLevel !== null && cell.feature.properties.level_risiko === highlightLevel;
+      cell.polygon.setStyle(match ? { stroke: true, color, weight: 1, opacity: 0.85 } : { stroke: false });
+    }
+  }, [highlightLevel, theme, data]);
 
   // The opacity slider only restyles.
   useEffect(() => {
