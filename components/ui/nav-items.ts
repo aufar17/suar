@@ -10,7 +10,7 @@ export interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Peta", description: "Hotspot, zona, dan prediksi risiko", icon: MapIcon },
   { href: "/statistik", label: "Statistik", description: "Tren bulanan dan peringkat", icon: BarChart3 },
-  { href: "/wilayah", label: "Wilayah", description: "12 kabupaten/kota", icon: MapPinned },
+  { href: "/wilayah", label: "Wilayah", description: "Provinsi dan kabupaten/kota", icon: MapPinned },
   { href: "/tentang", label: "Tentang", description: "Metode dan sumber data", icon: Info },
 ];
 

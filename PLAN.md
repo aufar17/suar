@@ -8,6 +8,17 @@ Cara kerja:
 - Di akhir setiap fase: jalankan `pnpm lint`, `pnpm typecheck`, `pnpm build`, pastikan semua kriteria selesai terpenuhi, lalu buat commit dengan pesan `fase-N: <ringkasan>`.
 - Kalau ada keputusan yang tidak tercakup di dokumen ini, pilih opsi paling sederhana, lalu catat di bagian **Catatan Keputusan** di akhir file ini.
 
+> **Revisi cakupan nasional (N1–N6).** Cakupan sistem diubah dari Provinsi Riau menjadi **seluruh Indonesia**
+> (34 provinsi, 514 kabupaten/kota). Fase 0–10 di bawah ditulis untuk versi Riau dan dibiarkan sebagai riwayat;
+> perilaku yang berlaku sekarang dicatat di **Catatan Keputusan → Cakupan nasional**.
+>
+> - N1 – Batas wilayah Indonesia (geoBoundaries, `pnpm geo:build`).
+> - N2 – Tipe, data mock, dan API nasional; halaman `/wilayah/[provinsi]` dan `/wilayah/[provinsi]/[kabupaten]`; statistik dua tingkat.
+> - N3 – Peta nasional bertingkat (provinsi → kabupaten/kota → grid 5 km), fokus wilayah, ringkasan kontekstual.
+> - N4 – Basemap berlabel lengkap (OSM standar dengan filter CSS).
+> - N5 – Legenda detail.
+> - N6 – Bersih-bersih teks, kode tak terpakai, dan dokumentasi.
+
 ---
 
 ## Fase 0 – Setup Proyek
@@ -459,3 +470,4 @@ _(Diisi oleh Claude Code selama pengerjaan.)_
 - Zona kebakaran kini punya **gaya garis per status**: baru = titik-titik, meluas = garis penuh tebal, stabil = putus-putus (seperti sebelumnya), menyusut = putus panjang tipis dan lebih pudar. Warna tetap satu.
 - Prediksi risiko: klik satu level → hanya level itu yang diwarnai (choropleth dan grid; state lokal, tidak disimpan di URL); klik lagi atau "Tampilkan semua level" untuk mengembalikan. Keterangan menjelaskan bahwa di zoom jauh warna adalah rata-rata per provinsi/kabupaten.
 - Hover item legenda menyorot objek terkait: level risiko → garis tepi wilayah/kotak level itu; kepercayaan → hotspot level itu ditebalkan, lainnya diredupkan (kelompok ikut diredupkan); kelompok → cincin ember pada kelompok; status zona → zona itu ditebalkan; gambut → gambut lebih pekat; batas → garis provinsi/kabupaten ditebalkan. Untuk keyboard, tombol level risiko juga memicu sorotan saat difokus.
+- *N6 – Bersih-bersih.* Judul situs, metadata, Open Graph, header, menu mobile, navigasi, halaman Tentang, dan README kini menyebut cakupan nasional; "Riau" hanya tersisa sebagai contoh wilayah (komentar, catatan riwayat). Helper yang tidak lagi dipakai dihapus (`ringCentroid`, `distanceKm`, `getRiskTextColor`, `isJsonCached`, `RISK_FEATURES`); berkas mock lama `regions.geojson` dan rute `/wilayah/[slug]` sudah dihapus di N2. Halaman Tentang menambahkan OpenStreetMap sebagai sumber peta dasar.

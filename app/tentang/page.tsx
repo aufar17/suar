@@ -24,7 +24,7 @@ import { RISK_LEVEL_ORDER, RISK_THRESHOLDS } from "@/lib/risk";
 
 export const metadata: Metadata = {
   title: "Tentang",
-  description: "Tujuan, sumber data, metode, dan keterbatasan SiAPI, sistem pemantauan dan prediksi karhutla Riau.",
+  description: "Tujuan, sumber data, metode, dan keterbatasan SiAPI, sistem pemantauan dan prediksi karhutla di seluruh Indonesia.",
 };
 
 const SECTIONS = [
@@ -38,7 +38,7 @@ const SECTIONS = [
 const SOURCES: { name: string; use: string; href: string; icon: LucideIcon }[] = [
   {
     name: "NASA FIRMS",
-    use: "Titik panas (hotspot) dari satelit VIIRS S-NPP, VIIRS NOAA-20, dan MODIS, termasuk tingkat kepercayaan dan FRP.",
+    use: "Titik panas (hotspot) untuk seluruh wilayah Indonesia dari satelit VIIRS S-NPP, VIIRS NOAA-20, dan MODIS, termasuk tingkat kepercayaan dan FRP.",
     href: "https://firms.modaps.eosdis.nasa.gov/",
     icon: Satellite,
   },
@@ -66,13 +66,19 @@ const SOURCES: { name: string; use: string; href: string; icon: LucideIcon }[] =
     href: "https://www.geoboundaries.org/",
     icon: MapIcon,
   },
+  {
+    name: "OpenStreetMap",
+    use: "Peta dasar (tile standar OpenStreetMap) dengan nama tempat. © kontributor OpenStreetMap, lisensi ODbL.",
+    href: "https://www.openstreetmap.org/copyright",
+    icon: Layers,
+  },
 ];
 
 const STEPS: { title: string; body: ReactNode; icon: LucideIcon }[] = [
   {
     title: "Grid 5 km",
     icon: Grid3x3,
-    body: "Provinsi Riau dibagi menjadi kotak berukuran sekitar 5×5 km. Setiap kotak punya atribut cuaca, tutupan lahan, status gambut, dan riwayat hotspot.",
+    body: "Daratan Indonesia dibagi menjadi sekitar 76.000 kotak berukuran 5×5 km. Setiap kotak punya atribut cuaca, tutupan lahan, status gambut, dan riwayat hotspot, serta tercatat provinsi dan kabupaten/kotanya. Di peta skala nasional, skor kotak dirata-ratakan per provinsi atau kabupaten/kota.",
   },
   {
     title: "Model klasifikasi",
@@ -156,7 +162,7 @@ export default async function TentangPage() {
         </h1>
         <p className="mt-5 text-lg leading-8 text-pretty text-muted-foreground">
           SiAPI (Sistem Analisis &amp; Prediksi Karhutla) memantau titik panas dan memperkirakan risiko kebakaran hutan dan
-          lahan di Provinsi Riau untuk tujuh hari ke depan.
+          lahan di seluruh Indonesia, dari tingkat provinsi sampai kotak 5 km, untuk tujuh hari ke depan.
         </p>
         {status.sumber === "mock" ? (
           <div className="mt-6 flex gap-3 rounded-2xl border border-ember/40 bg-ember-soft p-4 text-sm leading-6">

@@ -161,10 +161,8 @@ export function ChoroplethLayer({
         const previous = hoveredRef.current;
         hoveredRef.current = polygon;
         previous?.setStyle(styleRef.current(previous));
-        if (polygon) {
-          polygon.setStyle(styleRef.current(polygon));
-          polygon.bringToFront();
-        }
+        // No bringToFront: all layers share one canvas, so it would paint this fill over hotspots.
+        if (polygon) polygon.setStyle(styleRef.current(polygon));
       },
     );
 

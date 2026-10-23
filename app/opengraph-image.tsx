@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-export const alt = "SiAPI – Pemantauan & Prediksi Karhutla Riau";
+export const alt = "SiAPI – Pemantauan & Prediksi Karhutla Indonesia";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -45,7 +45,7 @@ export default function OpenGraphImage() {
             <div style={{ fontSize: 64, fontWeight: 700 }}>SiAPI</div>
           </div>
           <div style={{ fontSize: 40, fontWeight: 600, marginTop: 32, lineHeight: 1.2 }}>
-            Pemantauan &amp; Prediksi Karhutla Riau
+            Pemantauan &amp; Prediksi Karhutla Indonesia
           </div>
           <div style={{ fontSize: 26, color: "#4F5752", marginTop: 20, lineHeight: 1.4 }}>
             Hotspot satelit, zona kebakaran, dan prediksi risiko 7 hari per kotak grid 5 km.

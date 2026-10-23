@@ -60,29 +60,6 @@ export function ringAreaKm2(ring: Position[]): number {
   return Math.abs(area / 2);
 }
 
-/** Area-weighted centroid of a ring. */
-export function ringCentroid(ring: Position[]): Position {
-  let area = 0;
-  let cx = 0;
-  let cy = 0;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const cross = ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1];
-    area += cross;
-    cx += (ring[j][0] + ring[i][0]) * cross;
-    cy += (ring[j][1] + ring[i][1]) * cross;
-  }
-  if (area === 0) return ring[0];
-  return [cx / (3 * area), cy / (3 * area)];
-}
-
-/** Distance in km between two positions (equirectangular approximation). */
-export function distanceKm(a: Position, b: Position): number {
-  const meanLat = ((a[1] + b[1]) / 2) * (Math.PI / 180);
-  const dx = (a[0] - b[0]) * KM_PER_DEG_LON_EQUATOR * Math.cos(meanLat);
-  const dy = (a[1] - b[1]) * KM_PER_DEG_LAT;
-  return Math.hypot(dx, dy);
-}
-
 /** Andrew's monotone chain. Returns an open, counter-clockwise hull. */
 export function convexHull(points: Position[]): Position[] {
   const pts = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);

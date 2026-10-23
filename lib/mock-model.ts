@@ -4,8 +4,6 @@ import type { RiskFactor } from "@/types";
 // cell, and lib/data/mock.ts uses it again to explain a cell (top factors), so the stored mock
 // only needs the scores and the inputs. Not used with DATA_SOURCE=supabase.
 
-export const RISK_FEATURES = ["hari_tanpa_hujan", "kelembapan", "lahan_gambut", "hotspot_sekitar", "ndvi"] as const;
-
 export const RISK_INTERCEPT = -2.2;
 
 export interface RiskInputs {
@@ -24,7 +22,7 @@ export interface RiskInputs {
 const decimal = (v: number, digits = 2) => v.toFixed(digits).replace(".", ",");
 const round3 = (v: number) => Math.round(v * 1000) / 1000;
 
-/** Contribution of every feature in RISK_FEATURES order (positive = raises risk). */
+/** Contribution of every feature in the order hari_tanpa_hujan, kelembapan, lahan_gambut, hotspot_sekitar, ndvi (positive = raises risk). */
 export function contributionValues(x: RiskInputs): number[] {
   const hsWeight = 1 - 0.06 * x.dayOffset;
   return [
@@ -36,7 +34,7 @@ export function contributionValues(x: RiskInputs): number[] {
   ];
 }
 
-/** SHAP-like contribution of every feature with its explanation, in RISK_FEATURES order. */
+/** SHAP-like contribution of every feature with its explanation, in the same order. */
 export function riskContributions(x: RiskInputs): RiskFactor[] {
   const [dry, humidity, peat, hotspots, ndvi] = contributionValues(x);
   return [

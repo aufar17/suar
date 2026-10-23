@@ -1,6 +1,7 @@
 # SiAPI – Frontend
 
-Dashboard web untuk memantau hotspot dan memprediksi risiko kebakaran hutan dan lahan (karhutla) di Provinsi Riau.
+Dashboard web untuk memantau hotspot dan memprediksi risiko kebakaran hutan dan lahan (karhutla) di seluruh Indonesia
+(34 provinsi, 514 kabupaten/kota).
 Repo ini hanya berisi frontend. Data dihasilkan pipeline Python terpisah (`siapi-pipeline`) dan disimpan di Supabase
 (PostgreSQL + PostGIS). Selama pipeline belum siap, aplikasi memakai data mock dari folder `mock/`.
 

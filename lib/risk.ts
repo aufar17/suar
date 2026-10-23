@@ -24,21 +24,9 @@ const RISK_COLORS: Record<"light" | "dark", Record<RiskLevel, string>> = {
   dark: { rendah: "transparent", sedang: "#FACC15", tinggi: "#F97316", sangat_tinggi: "#DC2626" },
 };
 
-const RISK_TEXT_COLORS: Record<RiskLevel, string> = {
-  rendah: "#18181B",
-  sedang: "#18181B",
-  tinggi: "#18181B",
-  sangat_tinggi: "#FFFFFF",
-};
-
 /** Fill color for map layers. "rendah" is transparent on purpose. */
 export function getRiskColor(level: RiskLevel, theme: "light" | "dark" = "light"): string {
   return RISK_COLORS[theme][level];
-}
-
-/** Readable text color on top of {@link getRiskColor}. */
-export function getRiskTextColor(level: RiskLevel): string {
-  return RISK_TEXT_COLORS[level];
 }
 
 const RISK_LABELS: Record<RiskLevel, string> = {

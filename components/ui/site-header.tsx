@@ -20,7 +20,7 @@ export async function SiteHeader() {
           <LogoMark className="size-7" />
           <span className="flex items-baseline gap-2">
             <span className="text-[15px] font-semibold tracking-tight">SiAPI</span>
-            <span className="hidden text-xs text-muted-foreground xl:inline">Karhutla Riau</span>
+            <span className="hidden text-xs text-muted-foreground xl:inline">Karhutla Indonesia</span>
           </span>
         </Link>
 

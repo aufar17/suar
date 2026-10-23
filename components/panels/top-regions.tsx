@@ -19,7 +19,7 @@ const BAR_CLASSES: Record<RiskLevel, string> = {
   sangat_tinggi: "bg-risk-sangat-tinggi",
 };
 
-/** "5 kabupaten paling rawan" by mean risk score for the selected target date. */
+/** The five most at-risk regencies/cities (by mean risk score) for the selected target date. */
 export function TopRegions({
   stats,
   highlight,

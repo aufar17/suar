@@ -22,11 +22,11 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   applicationName: "SiAPI",
   title: {
-    default: "SiAPI – Pemantauan & Prediksi Karhutla Riau",
+    default: "SiAPI – Pemantauan & Prediksi Karhutla Indonesia",
     template: "%s · SiAPI",
   },
   description:
-    "Dashboard pemantauan hotspot dan prediksi risiko kebakaran hutan dan lahan di Provinsi Riau.",
+    "Dashboard pemantauan hotspot dan prediksi risiko kebakaran hutan dan lahan di seluruh Indonesia, per provinsi dan kabupaten/kota.",
   openGraph: {
     type: "website",
     locale: "id_ID",

@@ -61,7 +61,7 @@ export function MobileNav({ footer }: { footer?: ReactNode }) {
           <SheetTitle className="flex items-center gap-2 text-base">
             <LogoMark className="size-7" /> SiAPI
           </SheetTitle>
-          <SheetDescription className="text-xs">Pemantauan &amp; prediksi karhutla Riau</SheetDescription>
+          <SheetDescription className="text-xs">Pemantauan &amp; prediksi karhutla Indonesia</SheetDescription>
         </SheetHeader>
         <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-3">
           <Suspense fallback={<MobileNavLinks pathname={null} onNavigate={close} />}>

@@ -34,10 +34,6 @@ export function prefetchJson(url: string): Promise<unknown> {
   return request;
 }
 
-export function isJsonCached(url: string): boolean {
-  return responseCache.has(url);
-}
-
 export interface JsonState<T> {
   /** Latest data. While a new URL loads, this still holds the previous result. */
   data: T | undefined;

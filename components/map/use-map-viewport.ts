@@ -31,13 +31,17 @@ export function useMapViewport(map: L.Map | null, delay = 250): MapViewport | nu
   useEffect(() => {
     if (!map) return;
     let timer = 0;
+    let active = true;
     const update = () => {
       window.clearTimeout(timer);
       timer = window.setTimeout(() => setViewport(read(map)), delay);
     };
-    map.whenReady(() => setViewport(read(map)));
+    map.whenReady(() => {
+      if (active) setViewport(read(map));
+    });
     map.on("moveend zoomend resize", update);
     return () => {
+      active = false;
       window.clearTimeout(timer);
       map.off("moveend zoomend resize", update);
     };
