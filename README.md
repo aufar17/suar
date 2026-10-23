@@ -138,8 +138,11 @@ docs/                kontrak RPC Supabase
 
 ## Catatan
 
-- Peta dasar memakai tile Esri Canvas (World Light/Dark Gray, mengikuti tema) dengan atribusi Esri dan OpenStreetMap.
-  Layanan ini ditujukan untuk penggunaan non-komersial/pengembangan; sebelum rilis produksi, cek syarat Esri (akun
-  ArcGIS Location Platform) atau ganti penyedia di `BASEMAPS` (`components/map/map-view.tsx`). CARTO Positron/Dark
-  Matter kini membutuhkan API key.
+- Peta dasar memakai tile standar OpenStreetMap (label nama tempat paling lengkap untuk Indonesia di antara penyedia
+  tanpa kunci), diredam dengan filter CSS pada pane tile: saturasi diturunkan di mode terang, dibalik (invert) di
+  mode gelap. Atribusi "© OpenStreetMap contributors" wajib tampil. Server tile OSM tunduk pada
+  [Tile Usage Policy](https://operations.osmfoundation.org/policies/tiles/) (bukan untuk trafik besar); sebelum rilis
+  produksi, pindah ke penyedia tile berbayar atau server tile sendiri dengan mengganti `TILE_URL` di
+  `components/map/map-view.tsx`. CARTO Voyager/Positron/Dark Matter kini membutuhkan API key (tanpa kunci
+  mengembalikan tile ber-watermark).
 - Hotspot bukan kebakaran terkonfirmasi, dan prediksi risiko adalah keluaran model, bukan kepastian.

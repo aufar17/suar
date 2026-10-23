@@ -82,6 +82,9 @@ const GRID_MIN_ZOOM = 9;
 /** Largest bbox the grid endpoint accepts (square degrees). */
 const MAX_GRID_AREA = 24;
 
+/** Default fill of the risk grid: translucent so basemap labels stay readable. */
+const DEFAULT_RISK_OPACITY = 0.55;
+
 /** Time each prediction day stays on screen while the timeline plays. */
 const PLAY_STEP_MS = 1100;
 
@@ -108,7 +111,7 @@ export function MapDashboard({ status }: { status: DataStatus }) {
   const wide = useMediaQuery("(min-width: 1280px)");
   const [map, setMap] = useState<L.Map | null>(null);
   const [selection, setSelection] = useState<MapSelection | null>(null);
-  const [riskOpacity, setRiskOpacity] = useState(0.7);
+  const [riskOpacity, setRiskOpacity] = useState(DEFAULT_RISK_OPACITY);
   const [panelOpen, setPanelOpen] = useState(true);
   // `null` = automatic: the summary starts open only on wide screens, where it does not cover the map.
   const [summaryOpen, setSummaryOpen] = useState<boolean | null>(null);

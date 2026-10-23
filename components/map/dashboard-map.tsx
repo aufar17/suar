@@ -120,7 +120,7 @@ export default function DashboardMap({
           data={regions}
           stats={regionStats}
           theme={theme}
-          opacity={riskOn ? riskOpacity / 0.7 : 0}
+          opacity={riskOn ? riskOpacity / 0.55 : 0}
           parentNames={regionNames}
           emphasize={focusSlug ?? undefined}
           onlyLevel={onlyLevel}

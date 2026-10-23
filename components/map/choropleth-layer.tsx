@@ -13,7 +13,7 @@ import { attachHoverTooltip, escapeHtml, swatchHtml, tooltipHtml } from "./hover
 import { addOrderedLayer, removeOrderedLayer } from "./layer-order";
 
 /** Fill opacity at full strength; low enough that basemap labels stay readable underneath. */
-export const CHOROPLETH_FILL = 0.5;
+export const CHOROPLETH_FILL = 0.42;
 const TRANSITION_MS = 260;
 
 type RegionPolygon = L.Polygon & { region: RegionBoundaryFeature };

@@ -286,6 +286,17 @@
   transition: opacity 200ms ease;
 }
 
+/* OSM basemap, calmer: fewer saturated greens and pinks so data colors stand out. Only the
+   tile pane is filtered; data layers keep their real colors. */
+[data-map-theme="light"] .leaflet-tile-pane {
+  filter: saturate(0.3) brightness(1.04) contrast(0.92);
+}
+
+/* Dark mode: the same tiles inverted; labels become light text on a dark map. */
+[data-map-theme="dark"] .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) saturate(0.3) brightness(0.88) contrast(0.9);
+}
+
 .leaflet-control-attribution {
   font-size: 11px;
   border-top-left-radius: 8px;

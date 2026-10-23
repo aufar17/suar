@@ -43,7 +43,7 @@ export default function RegionMap({
       {kind === "provinsi" && boundaries ? (
         <ChoroplethLayer data={boundaries} stats={stats} theme={theme} parentNames={regionNames} />
       ) : null}
-      {kind === "kabupaten" && risk ? <RiskLayer data={risk} opacity={0.65} theme={theme} /> : null}
+      {kind === "kabupaten" && risk ? <RiskLayer data={risk} opacity={0.55} theme={theme} /> : null}
       {kind === "kabupaten" && boundaries ? <BoundaryLayer data={boundaries} theme={theme} emphasize={slug} /> : null}
       {hotspots ? <HotspotLayer data={hotspots} regionNames={regionNames} theme={theme} /> : null}
     </MapView>

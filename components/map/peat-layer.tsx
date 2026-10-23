@@ -8,7 +8,7 @@ import type { RiskCellCollection } from "@/types";
 import { fadeInPaths, fadeOutAndRemove } from "./animate";
 import { addOrderedLayer, removeOrderedLayer } from "./layer-order";
 
-const BASE = { opacity: 0, fillOpacity: 0.32 };
+const BASE = { opacity: 0, fillOpacity: 0.26 };
 
 /**
  * Peatland, drawn from the grid cells flagged `is_gambut` as one soft, borderless layer.

@@ -5,29 +5,24 @@ import "./leaflet-icons";
 
 import type L from "leaflet";
 import type { ReactNode } from "react";
-import { MapContainer, Pane, TileLayer } from "react-leaflet";
+import { MapContainer, TileLayer } from "react-leaflet";
 import type { Theme } from "@/components/ui/theme";
 import { INDONESIA_BBOX } from "@/lib/geo";
 import type { BBox } from "@/types";
 import { bboxToBounds } from "./bounds";
 
-// Esri Canvas basemaps (light/dark gray) with a separate label layer. CARTO Positron/Dark
-// Matter now return "API KEY REQUIRED" tiles without a key; to switch, change these URLs
-// (see PLAN.md, Catatan Keputusan, for the terms of each provider).
-const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas";
-const BASEMAPS: Record<Theme, { base: string; labels: string }> = {
-  light: {
-    base: `${ESRI}/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}`,
-    labels: `${ESRI}/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}`,
-  },
-  dark: {
-    base: `${ESRI}/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}`,
-    labels: `${ESRI}/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}`,
-  },
-};
+// OpenStreetMap standard tiles: the most detailed place names for Indonesia among the
+// key-free providers (CARTO Voyager/Positron/Dark Matter return watermarked "API key
+// required" tiles, and the Esri Canvas reference layer only names large cities). The tiles
+// are toned down with a CSS filter on the tile pane (app/globals.css): desaturated in light
+// mode, inverted in dark mode. The data layers sit on top, translucent enough to read labels.
+const TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 
 const ATTRIBUTION =
-  'Tiles &copy; <a href="https://www.esri.com/">Esri</a> &mdash; Esri, HERE, Garmin, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, GIS User Community';
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &middot; Batas wilayah: <a href="https://www.geoboundaries.org/">geoBoundaries</a> (OSM, ODbL; BPS/OCHA, CC BY 3.0 IGO)';
+
+/** Deepest zoom; OSM tiles exist up to 19. */
+export const MAP_MAX_ZOOM = 18;
 
 export interface MapViewProps {
   children?: ReactNode;
@@ -55,7 +50,7 @@ export function MapView({
   maxBounds,
 }: MapViewProps) {
   return (
-    <div role="region" aria-label={label} className="h-full w-full">
+    <div role="region" aria-label={label} data-map-theme={theme} className="h-full w-full">
       <MapContainer
         ref={(map) => {
           if (map) onReady?.(map);
@@ -67,17 +62,13 @@ export function MapView({
         minZoom={4}
         maxBounds={maxBounds ? bboxToBounds(maxBounds) : undefined}
         maxBoundsViscosity={0.8}
-        maxZoom={15}
+        maxZoom={MAP_MAX_ZOOM}
         preferCanvas
         zoomControl={false}
         keyboardPanDelta={120}
         className="h-full w-full"
       >
-        <TileLayer key={theme} attribution={ATTRIBUTION} url={BASEMAPS[theme].base} maxNativeZoom={16} maxZoom={20} />
-        {/* Place names above the data layers; the pane ignores the pointer so clicks reach the grid. */}
-        <Pane name="labels" style={{ zIndex: 450, pointerEvents: "none" }}>
-          <TileLayer key={theme} url={BASEMAPS[theme].labels} maxNativeZoom={16} maxZoom={20} />
-        </Pane>
+        <TileLayer attribution={ATTRIBUTION} url={TILE_URL} maxZoom={MAP_MAX_ZOOM} maxNativeZoom={19} />
         {children}
       </MapContainer>
     </div>
