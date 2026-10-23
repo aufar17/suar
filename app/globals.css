@@ -331,6 +331,61 @@
   display: none;
 }
 
+/* Numbered hotspot groups at small scales (Leaflet divIcon). */
+.hotspot-group-icon {
+  background: none;
+  border: 0;
+}
+
+.hotspot-group {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--map-hotspot-stroke);
+  border-radius: 9999px;
+  background: var(--map-hotspot);
+  color: var(--map-hotspot-stroke);
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--map-hotspot) 22%, transparent),
+    var(--shadow-panel);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  animation: hotspot-group-in 200ms ease-out;
+  transition:
+    box-shadow 150ms ease,
+    transform 150ms ease;
+}
+
+.hotspot-group-icon:hover .hotspot-group,
+.hotspot-group-icon:focus-visible .hotspot-group,
+.hotspot-group[data-emphasis="true"] {
+  box-shadow:
+    0 0 0 5px color-mix(in srgb, var(--map-selection) 45%, transparent),
+    var(--shadow-panel);
+}
+
+.hotspot-group[data-dimmed="true"] {
+  opacity: 0.35;
+}
+
+.hotspot-group-icon:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 9999px;
+}
+
+@keyframes hotspot-group-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+
 /* On small screens the attribution sits above the floating prediction timeline. */
 @media (max-width: 1023px) {
   .map-frame .leaflet-bottom {

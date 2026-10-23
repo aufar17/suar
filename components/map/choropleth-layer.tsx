@@ -52,6 +52,7 @@ export function ChoroplethLayer({
   onlyLevel,
   highlightLevel,
   hint,
+  outlined = true,
   onSelect,
 }: {
   data: RegionBoundaryCollection;
@@ -70,6 +71,8 @@ export function ChoroplethLayer({
   highlightLevel?: RiskLevel | null;
   /** Last tooltip line, e.g. "Klik untuk memperbesar". */
   hint?: string;
+  /** Draw thin outlines; off when a boundary layer already draws them (hover still outlines). */
+  outlined?: boolean;
   onSelect?: (feature: RegionBoundaryFeature) => void;
 }) {
   const map = useMap();
@@ -104,11 +107,11 @@ export function ChoroplethLayer({
       return {
         color: highlighted ? (theme === "dark" ? "#FAFAFA" : "#18181B") : outline(theme),
         weight: hovered ? 2.6 : highlighted ? 2.2 : strong ? 2.6 : 0.8,
-        opacity: hovered || highlighted || strong ? 1 : 0.55,
+        opacity: hovered || highlighted || strong ? 1 : outlined ? 0.55 : 0,
       };
     };
     for (const state of regionsRef.current.values()) state.polygon.setStyle(styleRef.current(state.polygon));
-  }, [emphasize, highlightLevel, theme]);
+  }, [emphasize, highlightLevel, theme, outlined]);
 
   // Boundary set lifetime: build polygons, fade out on change/unmount.
   useEffect(() => {

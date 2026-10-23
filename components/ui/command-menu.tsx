@@ -2,7 +2,7 @@
 
 import { Laptop, Loader2, MapPin, MapPinned, Moon, Search, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,7 +14,8 @@ import {
   CommandList,
   CommandLoading,
 } from "@/components/ui/command";
-import { regionDisplayName, regionHref } from "@/lib/labels";
+import { regionDisplayName } from "@/lib/labels";
+import { focusRegionOnMap } from "@/components/map/focus-region";
 import { useJson } from "@/lib/use-json";
 import type { RegionIndexItem } from "@/types";
 import { NAV_ITEMS } from "./nav-items";
@@ -46,6 +47,7 @@ export function CommandMenu() {
   if (open && !wanted) setWanted(true);
   const regions = useJson<RegionIndexItem[]>(wanted ? "/api/regions/list" : null);
   const router = useRouter();
+  const pathname = usePathname();
   const { setTheme } = useTheme();
   const modifier = useModifierKey();
 
@@ -69,6 +71,10 @@ export function CommandMenu() {
     setOpen(false);
     action();
   };
+
+  // Regions open on the map: zoom there directly, or go to the map focused on the region.
+  const showRegion = (slug: string) =>
+    run(() => (pathname === "/" ? focusRegionOnMap(slug) : router.push(`/?wilayah=${slug}`)));
 
   const { provinces, regencies, provinceNames } = useMemo(() => {
     const list = regions.data ?? [];
@@ -133,7 +139,7 @@ export function CommandMenu() {
               <CommandItem
                 key={region.slug}
                 value={`provinsi ${region.nama} ${region.slug}`}
-                onSelect={() => run(() => router.push(regionHref(region)))}
+                onSelect={() => showRegion(region.slug)}
               >
                 <MapPinned />
                 <span>{region.nama}</span>
@@ -146,7 +152,7 @@ export function CommandMenu() {
               <CommandItem
                 key={region.slug}
                 value={`wilayah ${regionDisplayName(region)} ${region.slug} ${provinceNames.get(region.provinsi ?? "") ?? ""}`}
-                onSelect={() => run(() => router.push(regionHref(region)))}
+                onSelect={() => showRegion(region.slug)}
               >
                 <MapPin />
                 <span className="truncate">{region.level === "kota" ? `Kota ${region.nama}` : region.nama}</span>

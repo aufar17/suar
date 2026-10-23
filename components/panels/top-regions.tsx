@@ -22,11 +22,14 @@ const BAR_CLASSES: Record<RiskLevel, string> = {
 /** "5 kabupaten paling rawan" by mean risk score for the selected target date. */
 export function TopRegions({
   stats,
+  highlight,
   error,
   onRetry,
   className,
 }: {
   stats: RegionStat[] | undefined;
+  /** Slug marked as the current region. */
+  highlight?: string | null;
   error?: string;
   onRetry?: () => void;
   className?: string;
@@ -77,7 +80,11 @@ export function TopRegions({
           <li key={region.slug}>
             <Link
               href={regionHref(region)}
-              className="group -mx-1 flex min-h-11 items-center gap-3 rounded-lg px-2 py-1.5 transition-colors duration-150 hover:bg-muted/70"
+              aria-current={region.slug === highlight ? "true" : undefined}
+              className={cn(
+                "group -mx-1 flex min-h-11 items-center gap-3 rounded-lg px-2 py-1.5 transition-colors duration-150 hover:bg-muted/70",
+                region.slug === highlight && "bg-ember-soft hover:bg-ember-soft",
+              )}
             >
               <span className="w-3 font-mono text-xs text-muted-foreground tabular-nums">{index + 1}</span>
               <span className="min-w-0 flex-1">

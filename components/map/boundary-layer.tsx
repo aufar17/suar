@@ -8,7 +8,7 @@ import { pointInRing } from "@/lib/geo";
 import type { Position, RegionBoundaryCollection } from "@/types";
 import { fadeInPaths, fadeOutAndRemove } from "./animate";
 import { escapeHtml } from "./hover";
-import { addOrderedLayer, removeOrderedLayer } from "./layer-order";
+import { addOrderedLayer, removeOrderedLayer, type OrderedLayer } from "./layer-order";
 
 export function boundaryColor(theme: Theme) {
   return theme === "dark" ? "#A1A1AA" : "#3F3F46";
@@ -31,24 +31,30 @@ export function BoundaryLayer({
   theme,
   emphasize,
   showLabel = true,
+  weight = WEIGHT.normal,
+  orderKey = "batas",
 }: {
   data: RegionBoundaryCollection;
   theme: Theme;
   /** Slug drawn with a heavier outline (region pages). */
   emphasize?: string;
   showLabel?: boolean;
+  /** Line width of the outlines (provinces are drawn heavier than regencies). */
+  weight?: number;
+  orderKey?: OrderedLayer;
 }) {
   const map = useMap();
 
   useEffect(() => {
     const color = boundaryColor(theme);
+    const normal = weight;
     const group = L.featureGroup();
     const regions = data.features.map((feature) => {
       const rings = outerRings(feature.geometry);
       const strong = feature.properties.slug === emphasize;
       const polygon = L.polygon(
         rings.map((ring) => ring.map(([lon, lat]) => L.latLng(lat, lon))),
-        { color, weight: strong ? WEIGHT.strong : WEIGHT.normal, opacity: 0, fill: false, interactive: false },
+        { color, weight: strong ? WEIGHT.strong : normal, opacity: 0, fill: false, interactive: false },
       ).addTo(group);
       return { feature, rings, polygon, strong };
     });
@@ -62,7 +68,7 @@ export function BoundaryLayer({
       if (hovered === next) return;
       if (hovered) {
         hovered.polygon.setStyle({
-          weight: hovered.strong ? WEIGHT.strong : WEIGHT.normal,
+          weight: hovered.strong ? WEIGHT.strong : normal,
           opacity: hovered.strong ? OPACITY.strong : OPACITY.normal,
         });
       }
@@ -86,18 +92,20 @@ export function BoundaryLayer({
       tooltip.remove();
     };
 
-    map.on("mousemove", onMove);
-    map.on("mouseout", onOut);
-    addOrderedLayer(map, "batas", group);
+    if (showLabel) {
+      map.on("mousemove", onMove);
+      map.on("mouseout", onOut);
+    }
+    addOrderedLayer(map, orderKey, group);
     const cancel = fadeInPaths(group.getLayers() as L.Path[], base);
     return () => {
       cancel();
       map.off("mousemove", onMove);
       map.off("mouseout", onOut);
       tooltip.remove();
-      removeOrderedLayer(map, "batas", group, () => fadeOutAndRemove(group, base));
+      removeOrderedLayer(map, orderKey, group, () => fadeOutAndRemove(group, base));
     };
-  }, [map, data, theme, emphasize, showLabel]);
+  }, [map, data, theme, emphasize, showLabel, weight, orderKey]);
 
   return null;
 }

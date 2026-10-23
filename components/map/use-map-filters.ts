@@ -21,6 +21,8 @@ export interface MapFilters {
   lapisan: LayerKey[];
   /** Prediction day offset (+1 … +7). */
   prediksi: number;
+  /** Focused province or regency (slug): the summary describes it. */
+  wilayah: string | null;
 }
 
 export const DEFAULT_FILTERS: MapFilters = {
@@ -28,6 +30,7 @@ export const DEFAULT_FILTERS: MapFilters = {
   conf: "low",
   lapisan: ["hotspot", "zona", "risiko", "batas"],
   prediksi: 1,
+  wilayah: null,
 };
 
 export function parseFilters(params: URLSearchParams): MapFilters {
@@ -35,6 +38,7 @@ export function parseFilters(params: URLSearchParams): MapFilters {
   const conf = params.get("conf");
   const prediksi = Number(params.get("prediksi"));
   const lapisan = params.get("lapisan");
+  const wilayah = params.get("wilayah");
   return {
     rentang: (RANGE_OPTIONS as readonly number[]).includes(rentang) ? (rentang as RangeDays) : DEFAULT_FILTERS.rentang,
     conf: (CONFIDENCE_LEVELS as readonly string[]).includes(conf ?? "") ? (conf as Confidence) : DEFAULT_FILTERS.conf,
@@ -43,6 +47,7 @@ export function parseFilters(params: URLSearchParams): MapFilters {
         ? DEFAULT_FILTERS.lapisan
         : LAYER_KEYS.filter((key) => lapisan.split(",").includes(key)),
     prediksi: Number.isInteger(prediksi) && prediksi >= 1 && prediksi <= 7 ? prediksi : DEFAULT_FILTERS.prediksi,
+    wilayah: wilayah && /^[a-z0-9-]+$/.test(wilayah) ? wilayah : null,
   };
 }
 
@@ -53,6 +58,7 @@ export function serializeFilters(filters: MapFilters): string {
   const layers = LAYER_KEYS.filter((key) => filters.lapisan.includes(key));
   if (layers.join(",") !== DEFAULT_FILTERS.lapisan.join(",")) params.set("lapisan", layers.join(","));
   if (filters.prediksi !== DEFAULT_FILTERS.prediksi) params.set("prediksi", String(filters.prediksi));
+  if (filters.wilayah) params.set("wilayah", filters.wilayah);
   return params.toString();
 }
 

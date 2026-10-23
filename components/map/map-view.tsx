@@ -40,10 +40,20 @@ export interface MapViewProps {
   onReady?: (map: L.Map) => void;
   /** Padding kept clear of floating panels when fitting `bbox`. */
   fitPadding?: L.FitBoundsOptions;
+  /** Panning stops at this extent (with a little elastic give). */
+  maxBounds?: BBox;
 }
 
 /** Base map: theme-matched tiles and one canvas renderer for many vector features. */
-export function MapView({ children, bbox = INDONESIA_BBOX, label, theme, onReady, fitPadding = { padding: [8, 8] } }: MapViewProps) {
+export function MapView({
+  children,
+  bbox = INDONESIA_BBOX,
+  label,
+  theme,
+  onReady,
+  fitPadding = { padding: [8, 8] },
+  maxBounds,
+}: MapViewProps) {
   return (
     <div role="region" aria-label={label} className="h-full w-full">
       <MapContainer
@@ -54,7 +64,9 @@ export function MapView({ children, bbox = INDONESIA_BBOX, label, theme, onReady
         boundsOptions={fitPadding}
         zoomSnap={0.25}
         zoomDelta={0.5}
-        minZoom={5}
+        minZoom={4}
+        maxBounds={maxBounds ? bboxToBounds(maxBounds) : undefined}
+        maxBoundsViscosity={0.8}
         maxZoom={15}
         preferCanvas
         zoomControl={false}

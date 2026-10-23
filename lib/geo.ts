@@ -120,3 +120,26 @@ export function parseBBox(value: string): BBox | null {
   if (minLon < -180 || maxLon > 180 || minLat < -90 || maxLat > 90) return null;
   return [minLon, minLat, maxLon, maxLat];
 }
+
+/** Point in a Polygon/MultiPolygon geometry (holes respected). */
+export function pointInGeometry(
+  point: Position,
+  geometry: { type: "Polygon"; coordinates: Position[][] } | { type: "MultiPolygon"; coordinates: Position[][][] },
+): boolean {
+  const polygons = geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates;
+  return polygons.some(([outer, ...holes]) => pointInRing(point, outer) && !holes.some((hole) => pointInRing(point, hole)));
+}
+
+/** Shrinks a bbox around its center until its area is at most `maxArea` square degrees. */
+export function limitBBox(bbox: BBox, maxArea: number): BBox {
+  const [minLon, minLat, maxLon, maxLat] = bbox;
+  const area = (maxLon - minLon) * (maxLat - minLat);
+  if (area <= maxArea) return bbox;
+  const scale = Math.sqrt(maxArea / area) * 0.999;
+  const cx = (minLon + maxLon) / 2;
+  const cy = (minLat + maxLat) / 2;
+  const hw = ((maxLon - minLon) / 2) * scale;
+  const hh = ((maxLat - minLat) / 2) * scale;
+  const r = (v: number) => Math.round(v * 1e4) / 1e4;
+  return [r(cx - hw), r(cy - hh), r(cx + hw), r(cy + hh)];
+}
