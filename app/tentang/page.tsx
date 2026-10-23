@@ -61,9 +61,9 @@ const SOURCES: { name: string; use: string; href: string; icon: LucideIcon }[] =
     icon: Sprout,
   },
   {
-    name: "Batas wilayah",
-    use: "Batas kabupaten/kota dari GADM atau Badan Informasi Geospasial (BIG).",
-    href: "https://gadm.org/",
+    name: "geoBoundaries",
+    use: "Batas provinsi (ADM1, bersumber OpenStreetMap, lisensi ODbL) dan kabupaten/kota (ADM2, bersumber BPS dan OCHA, lisensi CC BY 3.0 IGO) dari rilis gbOpen, disederhanakan untuk peta web.",
+    href: "https://www.geoboundaries.org/",
     icon: MapIcon,
   },
 ];

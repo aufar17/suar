@@ -24,6 +24,22 @@ pnpm dev                     # http://localhost:3000
 | `pnpm lint` | ESLint |
 | `pnpm typecheck` | Generate tipe route lalu `tsc --noEmit` |
 | `pnpm mock:generate` | Membuat ulang data mock di `mock/` |
+| `pnpm geo:build` | Mengunduh dan menyederhanakan batas wilayah Indonesia ke `mock/` |
+
+### Batas wilayah
+
+`pnpm geo:build` mengunduh batas administrasi Indonesia dari [geoBoundaries](https://www.geoboundaries.org/)
+(rilis gbOpen IDN, versi *simplified*) ke `data-raw/` (tidak di-commit), lalu memprosesnya dengan mapshaper:
+
+- `mock/kabupaten.geojson` – 514 kabupaten/kota (< 2,5 MB), topologi bersih tanpa celah/tumpang tindih.
+- `mock/provinsi.geojson` – 34 provinsi (< 400 KB), hasil *dissolve* kabupaten/kota sehingga kedua level selalu pas.
+- `mock/provinsi-garis.geojson` – garis batas antarprovinsi dari topologi kabupaten (dipakai saat zoom dekat).
+
+Setiap fitur punya `id`, `slug`, `nama`, `level`, `provinsi` (slug induk), `label` (titik di dalam poligon), dan `bbox`.
+
+Atribusi: geoBoundaries (Runfola dkk., 2020, *PLoS ONE* 15(4): e0231866). Batas provinsi (ADM1) bersumber dari
+OpenStreetMap / Wambacher – © kontributor OpenStreetMap, lisensi ODbL 1.0. Batas kabupaten/kota (ADM2) bersumber dari
+BPS, World Food Programme, dan OCHA ROAP – lisensi CC BY 3.0 IGO.
 
 ### Data mock
 

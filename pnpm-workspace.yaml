@@ -1,4 +1,6 @@
 allowBuilds:
+  better-sqlite3: false
   esbuild: true
+  msgpackr-extract: false
   sharp: false
   unrs-resolver: false
