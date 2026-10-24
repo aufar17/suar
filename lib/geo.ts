@@ -31,20 +31,6 @@ export function pointInRing(point: Position, ring: Position[]): boolean {
   return inside;
 }
 
-export function ringBBox(ring: Position[]): BBox {
-  let minLon = Infinity;
-  let minLat = Infinity;
-  let maxLon = -Infinity;
-  let maxLat = -Infinity;
-  for (const [lon, lat] of ring) {
-    if (lon < minLon) minLon = lon;
-    if (lat < minLat) minLat = lat;
-    if (lon > maxLon) maxLon = lon;
-    if (lat > maxLat) maxLat = lat;
-  }
-  return [minLon, minLat, maxLon, maxLat];
-}
-
 export function pointInBBox([lon, lat]: Position, [minLon, minLat, maxLon, maxLat]: BBox): boolean {
   return lon >= minLon && lon <= maxLon && lat >= minLat && lat <= maxLat;
 }
@@ -101,15 +87,6 @@ export function parseBBox(value: string): BBox | null {
   if (minLon >= maxLon || minLat >= maxLat) return null;
   if (minLon < -180 || maxLon > 180 || minLat < -90 || maxLat > 90) return null;
   return [minLon, minLat, maxLon, maxLat];
-}
-
-/** Point in a Polygon/MultiPolygon geometry (holes respected). */
-export function pointInGeometry(
-  point: Position,
-  geometry: { type: "Polygon"; coordinates: Position[][] } | { type: "MultiPolygon"; coordinates: Position[][][] },
-): boolean {
-  const polygons = geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates;
-  return polygons.some(([outer, ...holes]) => pointInRing(point, outer) && !holes.some((hole) => pointInRing(point, hole)));
 }
 
 /** Shrinks a bbox around its center until its area is at most `maxArea` square degrees. */

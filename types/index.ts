@@ -106,8 +106,6 @@ export type RiskCellProps = z.infer<typeof riskCellPropsSchema>;
 
 export const riskCellFeatureSchema = featureSchema(polygonSchema, riskCellPropsSchema);
 export type RiskCellFeature = z.infer<typeof riskCellFeatureSchema>;
-export const riskCellCollectionSchema = featureCollectionSchema(riskCellFeatureSchema);
-export type RiskCellCollection = z.infer<typeof riskCellCollectionSchema>;
 
 /**
  * One cell of the compact grid: [cell_id, min_lon, min_lat, is_gambut (0|1), index into

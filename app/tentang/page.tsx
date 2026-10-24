@@ -67,8 +67,8 @@ const SOURCES: { name: string; use: string; href: string; icon: LucideIcon }[] =
     icon: MapIcon,
   },
   {
-    name: "OpenStreetMap",
-    use: "Peta dasar (tile standar OpenStreetMap) dengan nama tempat. © kontributor OpenStreetMap, lisensi ODbL.",
+    name: "OpenStreetMap · OpenFreeMap",
+    use: "Peta dasar vektor dari OpenFreeMap (data OpenStreetMap, skema OpenMapTiles) dengan nama tempat. © kontributor OpenStreetMap, lisensi ODbL.",
     href: "https://www.openstreetmap.org/copyright",
     icon: Layers,
   },

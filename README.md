@@ -6,7 +6,7 @@ Repo ini hanya berisi frontend. Data dihasilkan pipeline Python terpisah (`siapi
 (PostgreSQL + PostGIS). Selama pipeline belum siap, aplikasi memakai data mock dari folder `mock/`.
 
 **Stack:** Next.js 16 (App Router, Cache Components) · React 19 · TypeScript strict · Tailwind CSS 4 ·
-Leaflet + react-leaflet 5 · Recharts 3 · zod 4 · date-fns · @supabase/supabase-js.
+MapLibre GL JS 5 + react-map-gl 8 · Recharts 3 · zod 4 · date-fns · @supabase/supabase-js.
 
 ## Menjalankan
 
@@ -66,6 +66,7 @@ kabupaten/kota. Total ±13 MB. Data besar disimpan ringkas (lihat `types/mock.ts
 | `SUPABASE_URL` | jika `supabase` | URL proyek Supabase. |
 | `SUPABASE_ANON_KEY` | jika `supabase` | Anon key. Hanya dibaca di server. |
 | `SITE_URL` | tidak | URL publik untuk metadata Open Graph. Di Vercel otomatis memakai domain produksi. |
+| `NEXT_PUBLIC_MAP_STYLE_LIGHT`, `NEXT_PUBLIC_MAP_STYLE_DARK` | tidak | URL style MapLibre untuk peta dasar mode terang/gelap. Default OpenFreeMap `positron`/`dark` (tanpa API key). Dibaca di browser, jadi hanya untuk key publik penyedia peta. |
 
 Variabel Supabase sengaja **tanpa** prefix `NEXT_PUBLIC_`, dan semua file di `lib/data/` memakai
 `import "server-only"`, sehingga kredensial tidak pernah sampai ke browser.
@@ -91,21 +92,27 @@ error menyebutkan field yang bermasalah.
 ```
 app/                 halaman (/, /statistik, /wilayah, /wilayah/[provinsi], /wilayah/[provinsi]/[kabupaten], /tentang)
                      dan route handler app/api/*
-components/          map/ (Leaflet, hanya client), charts/, filters/, panels/, ui/
+components/          map/ (MapLibre, hanya client), charts/, filters/, panels/, ui/
 lib/data/            lapisan data: types.ts (interface DataSource), mock.ts, supabase.ts, index.ts (pemilih + cache)
 lib/                 risk.ts (level & warna risiko), format.ts (angka & tanggal Indonesia), geo.ts, api.ts
 types/               tipe TypeScript + skema zod untuk semua data
-mock/                file data mock
+mock/                file data mock (server)
+public/geo/          batas wilayah untuk peta di browser (hasil build-geo.ts)
 scripts/             generate-mock.ts, build-geo.ts (batas wilayah)
 docs/                kontrak RPC Supabase
 ```
 
 - **Server component** memanggil fungsi dari `lib/data`. **Client component** memanggil route handler di `app/api/*`.
 - Semua fungsi di `lib/data/index.ts` di-cache dengan `"use cache"` + `cacheLife("hours")`; respons API juga
-  mengirim `Cache-Control: s-maxage=3600, stale-while-revalidate=86400`. Data pipeline berubah sekitar sekali sehari.
-- Peta di-load dengan `dynamic(..., { ssr: false })`. Semua layer vektor memakai satu renderer canvas, urutan
-  tumpukan: gambut → risiko → batas → zona → sorotan → hotspot.
-- Filter peta (rentang waktu, kepercayaan, lapisan, hari prediksi) disimpan di URL agar tampilan bisa dibagikan.
+  mengirim `Cache-Control: max-age=600, s-maxage=3600, stale-while-revalidate=86400`. Data pipeline berubah sekitar
+  sekali sehari.
+- Peta (MapLibre GL JS, WebGL) di-load dengan `dynamic(..., { ssr: false })`. Batas wilayah dan hotspot diberikan
+  sebagai URL ke source GeoJSON sehingga diunduh dan di-parse oleh worker MapLibre; hotspot dikelompokkan oleh MapLibre
+  (`cluster: true`); skor risiko per wilayah/kotak disimpan di feature-state sehingga ganti hari tidak memuat ulang
+  geometri. Urutan lapisan dijaga slot di style (`components/map/basemap.ts`): wilayah → gambut → risiko → batas →
+  fokus → zona → sorotan → hotspot → label → kelompok hotspot.
+- Filter peta (rentang waktu, kepercayaan, lapisan, hari prediksi) dan posisi peta (`peta=zoom/lat/lon`, ditulis
+  setelah peta berhenti bergerak) disimpan di URL agar tampilan bisa dibagikan.
 
 ### API
 
@@ -138,11 +145,12 @@ docs/                kontrak RPC Supabase
 
 ## Catatan
 
-- Peta dasar memakai tile standar OpenStreetMap (label nama tempat paling lengkap untuk Indonesia di antara penyedia
-  tanpa kunci), diredam dengan filter CSS pada pane tile: saturasi diturunkan di mode terang, dibalik (invert) di
-  mode gelap. Atribusi "© OpenStreetMap contributors" wajib tampil. Server tile OSM tunduk pada
-  [Tile Usage Policy](https://operations.osmfoundation.org/policies/tiles/) (bukan untuk trafik besar); sebelum rilis
-  produksi, pindah ke penyedia tile berbayar atau server tile sendiri dengan mengganti `TILE_URL` di
-  `components/map/map-view.tsx`. CARTO Voyager/Positron/Dark Matter kini membutuhkan API key (tanpa kunci
-  mengembalikan tile ber-watermark).
+- Peta dasar: tile vektor [OpenFreeMap](https://openfreemap.org) (style `positron` untuk mode terang, `dark` untuk
+  mode gelap; data OpenStreetMap/OpenMapTiles), tanpa API key. Label nama tempat diatur ulang di
+  `components/map/basemap.ts` (nama Indonesia, ambang zoom per jenis tempat, halo). Atribusi OpenFreeMap, OpenMapTiles,
+  OpenStreetMap, Natural Earth, dan geoBoundaries tampil di pojok peta. Untuk penyedia lain (atau server tile sendiri),
+  isi `NEXT_PUBLIC_MAP_STYLE_LIGHT` dan `NEXT_PUBLIC_MAP_STYLE_DARK` dengan URL style MapLibre lengkap (termasuk API
+  key bila perlu).
+- Setelah `pnpm geo:build`, naikkan `VERSION` di `components/map/geo-files.ts` agar browser tidak memakai file batas
+  lama dari cache.
 - Hotspot bukan kebakaran terkonfirmasi, dan prediksi risiko adalah keluaran model, bukan kepastian.
