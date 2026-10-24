@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, type ReactNode } from "react";
+import { memo, useId, type ReactNode } from "react";
 import type { LayerKey, MapFilters, RangeDays } from "@/components/map/use-map-filters";
 import { Segmented } from "@/components/ui/segmented";
 import { Slider } from "@/components/ui/slider";
@@ -139,7 +139,7 @@ export function LayerToggles({
 }
 
 /** Controls shared by the desktop floating panel and the mobile drawer. */
-export function FilterControls({
+export const FilterControls = memo(function FilterControls({
   filters,
   setFilters,
   toggleLayer,
@@ -168,4 +168,4 @@ export function FilterControls({
       />
     </div>
   );
-}
+});

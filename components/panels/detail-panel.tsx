@@ -3,7 +3,7 @@
 import { ArrowRight, CalendarClock, Flame, Gauge, MapPin, RotateCw, Ruler, Satellite, ShieldCheck, Timer, type LucideIcon } from "lucide-react";
 import { motion } from "motion/react";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Drawer,
@@ -30,7 +30,7 @@ import type { ClusterFeature, ClusterStatus, HotspotFeature } from "@/types";
  * Feature details: a floating, non-modal sheet on desktop (the map stays usable, so
  * another feature can be picked while it is open) and a bottom drawer on mobile.
  */
-export function DetailPanel({
+export const DetailPanel = memo(function DetailPanel({
   open,
   onClose,
   desktop,
@@ -77,7 +77,7 @@ export function DetailPanel({
       </DrawerContent>
     </Drawer>
   );
-}
+});
 
 /** Placeholder with the shape of a detail body while the details of a map object load. */
 export function DetailSkeleton() {

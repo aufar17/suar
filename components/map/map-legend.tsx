@@ -2,7 +2,7 @@
 
 import { ChevronDown, Info, ListTree } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useId, useState, type ReactNode } from "react";
+import { memo, useId, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { RiskSwatch } from "@/components/ui/risk-badge";
@@ -298,7 +298,7 @@ export function LegendContent({
 }
 
 /** Collapsible floating legend (desktop and region maps). */
-export function MapLegend({
+export const MapLegend = memo(function MapLegend({
   defaultOpen,
   className,
   ...props
@@ -349,10 +349,10 @@ export function MapLegend({
       </AnimatePresence>
     </section>
   );
-}
+});
 
 /** Mobile: a "Legenda" button that opens the legend in a bottom drawer. */
-export function MapLegendDrawer({ className, ...props }: LegendProps & { className?: string }) {
+export const MapLegendDrawer = memo(function MapLegendDrawer({ className, ...props }: LegendProps & { className?: string }) {
   const [open, setOpen] = useState(false);
   if (props.layers.length === 0) return null;
   return (
@@ -374,4 +374,4 @@ export function MapLegendDrawer({ className, ...props }: LegendProps & { classNa
       </Drawer>
     </>
   );
-}
+});

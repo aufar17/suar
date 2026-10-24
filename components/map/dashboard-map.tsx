@@ -1,6 +1,7 @@
 "use client";
 
 import type { Map as MaplibreMap, PaddingOptions } from "maplibre-gl";
+import { memo } from "react";
 import { useResolvedTheme } from "@/components/ui/theme";
 import { INDONESIA_MAX_BBOX } from "@/lib/geo";
 import type { ClusterCollection, RegionStat, RiskGrid, RiskLevel } from "@/types";
@@ -20,6 +21,8 @@ import { ZoneLayers } from "./zone-layers";
 
 export interface DashboardMapProps {
   label: string;
+  /** Initial center and zoom from the URL (`peta`); otherwise the whole country. */
+  initialView?: { center: [number, number]; zoom: number } | null;
   /** Tier at the last settled view: decides which regions react to the pointer. */
   tier: MapTier;
   layers: LayerKey[];
@@ -61,9 +64,13 @@ export interface DashboardMapProps {
  * (`visibility`), and the zoom tiers are layer zoom ranges, so zooming never waits for React:
  * provinces < 6, regencies 6 to < 8, the 5 km grid and single hotspots ≥ 8. Boundaries and
  * hotspots are URLs that MapLibre's worker fetches and parses off the main thread.
+ *
+ * Memoized: the page re-renders when the map settles (summary, legend counts), and the map
+ * only re-renders when one of its own props changed.
  */
-export default function DashboardMap({
+export default memo(function DashboardMap({
   label,
+  initialView = null,
   tier,
   layers,
   regencies,
@@ -113,7 +120,14 @@ export default function DashboardMap({
   });
 
   return (
-    <MapView label={label} theme={theme} onReady={onReady} fitPadding={fitPadding} maxBounds={INDONESIA_MAX_BBOX}>
+    <MapView
+      label={label}
+      theme={theme}
+      initialView={initialView}
+      onReady={onReady}
+      fitPadding={fitPadding}
+      maxBounds={INDONESIA_MAX_BBOX}
+    >
       <MapInteractions>
         <RegionLayers
           level="provinsi"
@@ -181,4 +195,4 @@ export default function DashboardMap({
       </MapInteractions>
     </MapView>
   );
-}
+});

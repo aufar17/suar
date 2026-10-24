@@ -2,6 +2,7 @@
 
 import { Loader2, Pause, Play } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
+import { memo } from "react";
 import { PREDICTION_DAYS } from "@/components/map/use-map-filters";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -12,7 +13,7 @@ import { cn } from "@/lib/utils";
  * Prediction timeline: play/pause plus a +1…+7 day slider with dates. The slider handles
  * keyboard input (arrows, Home/End); the day labels are extra click targets for mice.
  */
-export function PredictionTimeline({
+export const PredictionTimeline = memo(function PredictionTimeline({
   baseDate,
   value,
   onChange,
@@ -110,4 +111,4 @@ export function PredictionTimeline({
       </ol>
     </section>
   );
-}
+});

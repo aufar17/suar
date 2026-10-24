@@ -17,7 +17,7 @@ import {
 import { AnimatePresence, motion } from "motion/react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FilterControls, RANGE_LABELS, type LayerOption } from "@/components/filters/filter-panel";
 import { PredictionTimeline } from "@/components/filters/prediction-day";
 import { ClusterDetail, DetailError, DetailPanel, DetailSkeleton, HotspotDetail } from "@/components/panels/detail-panel";
@@ -62,7 +62,7 @@ import type { MapSelection, SelectionShape } from "./selection";
 import { DEFAULT_RISK_OPACITY, REGENCY_MIN_ZOOM, tierOf } from "./styles";
 import { useMapIdleValue } from "./use-map-idle";
 import { useSourceStatus } from "./use-source-status";
-import { PREDICTION_DAYS, useMapFilters } from "./use-map-filters";
+import { parseMapView, PREDICTION_DAYS, useMapFilters, writeMapView } from "./use-map-filters";
 import { snapBBox, useMapViewport } from "./use-map-viewport";
 
 const DashboardMap = dynamic(() => import("./dashboard-map"), {
@@ -104,7 +104,9 @@ function byKey<T extends { slug: string }>(items: T[] | undefined) {
 }
 
 export function MapDashboard({ status }: { status: DataStatus }) {
-  const { filters, setFilters, toggleLayer } = useMapFilters();
+  const { filters, setFilters, toggleLayer, view } = useMapFilters();
+  // A shared link with `?peta=zoom/lat/lon` opens at that position (read once, on load).
+  const [initialView] = useState(() => parseMapView(view));
   const desktop = useIsDesktop();
   const wide = useMediaQuery("(min-width: 1280px)");
   const [map, setMap] = useState<MaplibreMap | null>(null);
@@ -119,8 +121,19 @@ export function MapDashboard({ status }: { status: DataStatus }) {
   const [onlyLevel, setOnlyLevel] = useState<RiskLevel | null>(null);
   const [legendHighlight, setLegendHighlight] = useState<LegendHighlight | null>(null);
 
-  // Updated once the map has settled (moveend + 300 ms), never while it moves.
+  // Map position is not React state: this is only updated once the map has settled (moveend
+  // + 300 ms), and drives the summary, the legend counts, the grid request, and the URL.
   const viewport = useMapViewport(map, 300);
+  const viewportSeenRef = useRef(false);
+  useEffect(() => {
+    if (!viewport) return;
+    // The first settled view is the initial one: the URL only changes once the user moves.
+    if (!viewportSeenRef.current) {
+      viewportSeenRef.current = true;
+      return;
+    }
+    writeMapView({ zoom: viewport.zoom, center: viewport.center });
+  }, [viewport]);
   const zoom = viewport?.zoom ?? 5;
   const tier = tierOf(zoom);
   const near = tier === "dekat";
@@ -187,20 +200,24 @@ export function MapDashboard({ status }: { status: DataStatus }) {
     return () => window.clearTimeout(timer);
   }, [playing, tierLoading, filters.prediksi, setFilters]);
 
-  const setPlaying = (next: boolean) => {
-    if (next) {
-      // Load the regional averages of every day up front so playback does not stall between
-      // days (the grid already holds every day).
-      for (const day of PREDICTION_DAYS) {
-        const date = addDaysIso(status.tanggal_data, day);
-        for (const url of [statsUrl("provinsi", statsQuery(date)), statsUrl("kabupaten", statsQuery(date))]) {
-          prefetchJson(url).catch(() => {});
+  const setPlaying = useCallback(
+    (next: boolean) => {
+      if (next) {
+        // Load the regional averages of every day up front so playback does not stall between
+        // days (the grid already holds every day). Each day then only updates feature-state.
+        for (const day of PREDICTION_DAYS) {
+          const date = addDaysIso(status.tanggal_data, day);
+          for (const level of ["provinsi", "kabupaten"] as const) {
+            prefetchJson(statsUrl(level, `date=${date}&${hotspotQuery}`)).catch(() => {});
+          }
         }
+        if (filters.prediksi >= PREDICTION_DAYS.length) setFilters({ prediksi: 1 });
       }
-      if (filters.prediksi >= PREDICTION_DAYS.length) setFilters({ prediksi: 1 });
-    }
-    setPlayRequested(next);
-  };
+      setPlayRequested(next);
+    },
+    [status.tanggal_data, hotspotQuery, filters.prediksi, setFilters],
+  );
+  const changePrediction = useCallback((prediksi: number) => setFilters({ prediksi }), [setFilters]);
 
   // Regions --------------------------------------------------------------------------------
   const regionNames = useMemo(() => Object.fromEntries((index.data ?? []).map((r) => [r.slug, r.nama])), [index.data]);
@@ -208,16 +225,20 @@ export function MapDashboard({ status }: { status: DataStatus }) {
   const provinceStatsBySlug = useMemo(() => byKey(provinceStats.data), [provinceStats.data]);
   const regencyStatsBySlug = useMemo(() => byKey(regencyStats.data), [regencyStats.data]);
 
-  const fitPadding: PaddingOptions = desktop
-    ? { top: 16, left: 324, right: summaryVisible ? 324 : 72, bottom: riskOn ? 150 : 16 }
-    : { top: 64, left: 12, right: 12, bottom: riskOn ? 150 : 16 };
+  const fitPadding = useMemo(
+    (): PaddingOptions =>
+      desktop
+        ? { top: 16, left: 324, right: summaryVisible ? 324 : 72, bottom: riskOn ? 150 : 16 }
+        : { top: 64, left: 12, right: 12, bottom: riskOn ? 150 : 16 },
+    [desktop, summaryVisible, riskOn],
+  );
   const fitPaddingRef = useRef(fitPadding);
   useEffect(() => {
     fitPaddingRef.current = fitPadding;
   });
 
   // Zoom to a region: from a click on the map, the command palette, or `?wilayah=` on load.
-  const pendingFlyRef = useRef<string | null>(filters.wilayah);
+  const pendingFlyRef = useRef<string | null>(initialView ? null : filters.wilayah);
   const flyTo = (slug: string, animate = true) => {
     const item = indexBySlug?.[slug];
     if (!map || !item) {
@@ -247,6 +268,11 @@ export function MapDashboard({ status }: { status: DataStatus }) {
   useEffect(() => {
     focusRegionRef.current = focusRegion;
   });
+  const selectRegion = useCallback((slug: string) => focusRegionRef.current(slug), []);
+  const selectCluster = useCallback((id: string) => setSelection({ kind: "cluster", id }), []);
+  const selectCell = useCallback((id: string) => setSelection({ kind: "cell", id }), []);
+  const selectHotspot = useCallback((id: string, point: [number, number]) => setSelection({ kind: "hotspot", id, point }), []);
+  const closeDetail = useCallback(() => setSelection(null), []);
   useEffect(() => {
     const onFocus = (event: Event) => focusRegionRef.current((event as CustomEvent<string>).detail);
     window.addEventListener(FOCUS_REGION_EVENT, onFocus);
@@ -301,82 +327,99 @@ export function MapDashboard({ status }: { status: DataStatus }) {
 
   // Summary values for the context --------------------------------------------------------
   const statsLoaded = provinceStats.data !== undefined && regencyStats.data !== undefined;
-  const contextStat = context
-    ? (context.level === "provinsi" ? provinceStatsBySlug : regencyStatsBySlug)?.[context.slug]
-    : undefined;
-  const hotspotCount = !statsLoaded
-    ? undefined
-    : context
-      ? (contextStat?.jumlah_hotspot ?? 0)
-      : sum(provinceStats.data ?? [], (s) => s.jumlah_hotspot);
-  // "Most hotspots": the province nationally, otherwise a regency of the province.
-  const hotspotChildren = context
-    ? (regencyStats.data ?? []).filter((s) => s.provinsi === contextProvince)
-    : (provinceStats.data ?? []);
-  const topHotspot =
-    context?.level === "provinsi" || !context
-      ? hotspotChildren.reduce<RegionStat | null>((best, s) => (!best || s.jumlah_hotspot > best.jumlah_hotspot ? s : best), null)
-      : null;
   // Regencies ranked by risk within the context's province (or nationally).
   const riskCandidates = useMemo(
     () => (regencyStats.data ?? []).filter((s) => !contextProvince || s.provinsi === contextProvince),
     [regencyStats.data, contextProvince],
   );
-  const mostAtRisk = riskCandidates[0];
-  const contextZones = (clusters.data?.features ?? []).filter(
-    (f) =>
-      !context || (context.level === "provinsi" ? f.properties.provinsi === context.slug : f.properties.kabupaten === context.slug),
-  );
-  const zoneCount = (s: string) => contextZones.filter((f) => f.properties.status === s).length;
-  const contextWeather = (weather.data ?? []).filter(
-    (w) => !context || (context.level === "provinsi" ? w.provinsi === context.slug : w.slug === context.slug),
-  );
-  const avgDryDays = contextWeather.length ? sum(contextWeather, (w) => w.cuaca.hari_tanpa_hujan) / contextWeather.length : undefined;
   const regencyContext = context && context.level !== "provinsi";
+  const { hotspotCount, stats } = useMemo(() => {
+    const contextStat = context
+      ? (context.level === "provinsi" ? provinceStatsBySlug : regencyStatsBySlug)?.[context.slug]
+      : undefined;
+    const hotspotCount = !statsLoaded
+      ? undefined
+      : context
+        ? (contextStat?.jumlah_hotspot ?? 0)
+        : sum(provinceStats.data ?? [], (s) => s.jumlah_hotspot);
+    // "Most hotspots": the province nationally, otherwise a regency of the province.
+    const hotspotChildren = context
+      ? (regencyStats.data ?? []).filter((s) => s.provinsi === contextProvince)
+      : (provinceStats.data ?? []);
+    const topHotspot =
+      context?.level === "provinsi" || !context
+        ? hotspotChildren.reduce<RegionStat | null>((best, s) => (!best || s.jumlah_hotspot > best.jumlah_hotspot ? s : best), null)
+        : null;
+    const mostAtRisk = riskCandidates[0];
+    const contextZones = (clusters.data?.features ?? []).filter(
+      (f) =>
+        !context || (context.level === "provinsi" ? f.properties.provinsi === context.slug : f.properties.kabupaten === context.slug),
+    );
+    const zoneCount = (s: string) => contextZones.filter((f) => f.properties.status === s).length;
+    const contextWeather = (weather.data ?? []).filter(
+      (w) => !context || (context.level === "provinsi" ? w.provinsi === context.slug : w.slug === context.slug),
+    );
+    const avgDryDays = contextWeather.length ? sum(contextWeather, (w) => w.cuaca.hari_tanpa_hujan) / contextWeather.length : undefined;
 
-  const stats: MapStat[] = [
-    {
-      label: `Hotspot ${RANGE_LABELS[filters.rentang]}`,
-      icon: Flame,
-      accent: true,
-      value: hotspotCount,
-      format: formatInteger,
-      hint: topHotspot && topHotspot.jumlah_hotspot > 0 ? `Terbanyak ${topHotspot.nama}` : rangeHint,
-    },
-    {
-      label: "Zona aktif",
-      icon: Hexagon,
-      value: clusters.data ? contextZones.length : undefined,
-      format: formatInteger,
-      hint: clusters.data ? `${zoneCount("baru")} baru · ${zoneCount("meluas")} meluas` : undefined,
-    },
-    regencyContext
-      ? {
-          label: "Rata-rata risiko",
-          icon: Gauge,
-          value: !statsLoaded ? undefined : (contextStat?.rata_skor_risiko ?? 0),
-          format: (v: number) => formatDecimal(v),
-          hint: contextStat
-            ? `${getRiskLabel(getRiskLevel(contextStat.rata_skor_risiko))} · maks ${formatDecimal(contextStat.maks_skor_risiko)}`
-            : undefined,
-        }
-      : {
-          label: "Paling rawan",
-          icon: TriangleAlert,
-          value: !statsLoaded ? undefined : (mostAtRisk?.nama ?? "–"),
-          hint: mostAtRisk
-            ? `${formatDecimal(mostAtRisk.rata_skor_risiko)} · ${getRiskLabel(getRiskLevel(mostAtRisk.rata_skor_risiko))}`
-            : undefined,
-        },
-    {
-      label: "Hari tanpa hujan",
-      icon: SunDim,
-      value: avgDryDays,
-      format: (v) => formatDecimal(v, 1),
-      unit: "hari",
-      hint: regencyContext ? "Cuaca terkini" : contextWeather.length ? `Rata-rata ${formatInteger(contextWeather.length)} kabupaten/kota` : undefined,
-    },
-  ];
+    const stats: MapStat[] = [
+      {
+        label: `Hotspot ${RANGE_LABELS[filters.rentang]}`,
+        icon: Flame,
+        accent: true,
+        value: hotspotCount,
+        format: formatInteger,
+        hint: topHotspot && topHotspot.jumlah_hotspot > 0 ? `Terbanyak ${topHotspot.nama}` : rangeHint,
+      },
+      {
+        label: "Zona aktif",
+        icon: Hexagon,
+        value: clusters.data ? contextZones.length : undefined,
+        format: formatInteger,
+        hint: clusters.data ? `${zoneCount("baru")} baru · ${zoneCount("meluas")} meluas` : undefined,
+      },
+      regencyContext
+        ? {
+            label: "Rata-rata risiko",
+            icon: Gauge,
+            value: !statsLoaded ? undefined : (contextStat?.rata_skor_risiko ?? 0),
+            format: (v: number) => formatDecimal(v),
+            hint: contextStat
+              ? `${getRiskLabel(getRiskLevel(contextStat.rata_skor_risiko))} · maks ${formatDecimal(contextStat.maks_skor_risiko)}`
+              : undefined,
+          }
+        : {
+            label: "Paling rawan",
+            icon: TriangleAlert,
+            value: !statsLoaded ? undefined : (mostAtRisk?.nama ?? "–"),
+            hint: mostAtRisk
+              ? `${formatDecimal(mostAtRisk.rata_skor_risiko)} · ${getRiskLabel(getRiskLevel(mostAtRisk.rata_skor_risiko))}`
+              : undefined,
+          },
+      {
+        label: "Hari tanpa hujan",
+        icon: SunDim,
+        value: avgDryDays,
+        format: (v) => formatDecimal(v, 1),
+        unit: "hari",
+        hint: regencyContext ? "Cuaca terkini" : contextWeather.length ? `Rata-rata ${formatInteger(contextWeather.length)} kabupaten/kota` : undefined,
+      },
+    ];
+    return { hotspotCount, stats };
+  }, [
+    context,
+    statsLoaded,
+    provinceStats.data,
+    regencyStats.data,
+    provinceStatsBySlug,
+    regencyStatsBySlug,
+    contextProvince,
+    riskCandidates,
+    regencyContext,
+    clusters.data,
+    weather.data,
+    filters.rentang,
+    rangeHint,
+  ]);
 
   // Map status messages
   const statusItems: MapStatusItem[] = [];
@@ -408,44 +451,63 @@ export function MapDashboard({ status }: { status: DataStatus }) {
     statusItems.push({ kind: "empty", message: "Perbesar peta untuk melihat lahan gambut" });
   }
 
-  const loadingDetail = (state: { error?: string; retry: () => void }) =>
-    state.error ? <DetailError onRetry={state.retry} /> : <DetailSkeleton />;
-  const detail =
-    selection?.kind === "cluster"
-      ? selectedZone
-        ? {
-            eyebrow: `Zona kebakaran · ${selectedZone.properties.id}`,
-            title: regionName(selectedZone.properties.kabupaten),
-            body: <ClusterDetail feature={selectedZone} regionName={regionName(selectedZone.properties.kabupaten)} />,
-          }
-        : null
-      : selection?.kind === "cell"
-        ? {
-            eyebrow: `Kotak grid ${selection.id} · 5×5 km`,
-            title: selectedCell ? regionName(selectedCell.properties.kabupaten) : "Memuat…",
-            body: selectedCell ? (
-              <CellDetail
-                feature={selectedCell}
-                regionName={regionName(selectedCell.properties.kabupaten)}
-                weather={weatherBySlug[selectedCell.properties.kabupaten]}
-              />
-            ) : (
-              loadingDetail(cellDetail)
-            ),
-          }
-        : selection?.kind === "hotspot"
+  const cellError = cellDetail.error;
+  const retryCell = cellDetail.retry;
+  const hotspotError = hotspotDetail.error;
+  const retryHotspot = hotspotDetail.retry;
+  const detail = useMemo(() => {
+    const regionName = (slug: string) => regionNames[slug] ?? slug;
+    const loadingDetail = (error: string | undefined, retry: () => void) =>
+      error ? <DetailError onRetry={retry} /> : <DetailSkeleton />;
+    return (
+      selection?.kind === "cluster"
+        ? selectedZone
           ? {
-              eyebrow: "Hotspot",
-              title: selectedHotspot ? regionName(selectedHotspot.properties.kabupaten) : "Memuat…",
-              body: selectedHotspot ? (
-                <HotspotDetail feature={selectedHotspot} regionName={regionName(selectedHotspot.properties.kabupaten)} />
+              eyebrow: `Zona kebakaran · ${selectedZone.properties.id}`,
+              title: regionName(selectedZone.properties.kabupaten),
+              body: <ClusterDetail feature={selectedZone} regionName={regionName(selectedZone.properties.kabupaten)} />,
+            }
+          : null
+        : selection?.kind === "cell"
+          ? {
+              eyebrow: `Kotak grid ${selection.id} · 5×5 km`,
+              title: selectedCell ? regionName(selectedCell.properties.kabupaten) : "Memuat…",
+              body: selectedCell ? (
+                <CellDetail
+                  feature={selectedCell}
+                  regionName={regionName(selectedCell.properties.kabupaten)}
+                  weather={weatherBySlug[selectedCell.properties.kabupaten]}
+                />
               ) : (
-                loadingDetail(hotspotDetail)
+                loadingDetail(cellError, retryCell)
               ),
             }
-          : null;
+          : selection?.kind === "hotspot"
+            ? {
+                eyebrow: "Hotspot",
+                title: selectedHotspot ? regionName(selectedHotspot.properties.kabupaten) : "Memuat…",
+                body: selectedHotspot ? (
+                  <HotspotDetail feature={selectedHotspot} regionName={regionName(selectedHotspot.properties.kabupaten)} />
+                ) : (
+                  loadingDetail(hotspotError, retryHotspot)
+                ),
+              }
+            : null
+    );
+  }, [
+    selection,
+    selectedZone,
+    selectedCell,
+    selectedHotspot,
+    regionNames,
+    weatherBySlug,
+    cellError,
+    retryCell,
+    hotspotError,
+    retryHotspot,
+  ]);
 
-  const visibleLayers = filters.lapisan.filter((key) => LAYERS.some((layer) => layer.key === key));
+  const visibleLayers = useMemo(() => filters.lapisan.filter((key) => LAYERS.some((layer) => layer.key === key)), [filters.lapisan]);
 
   // Hotspots and numbered groups on screen, read from the rendered (clustered) source.
   const hotspotCounts = useMapIdleValue(map, readHotspotCounts, sameHotspotCounts);
@@ -490,6 +552,7 @@ export function MapDashboard({ status }: { status: DataStatus }) {
     rangeLabel: RANGE_LABELS[filters.rentang],
     mock: status.sumber === "mock",
   };
+  // (The legend components are memoized and compare these props one by one.)
 
   const controls = (
     <FilterControls
@@ -540,6 +603,7 @@ export function MapDashboard({ status }: { status: DataStatus }) {
       <div className="map-frame absolute inset-0">
         <DashboardMap
           label="Peta hotspot dan prediksi risiko karhutla Indonesia"
+          initialView={initialView}
           tier={tier}
           layers={filters.lapisan}
           regencies={regenciesWanted}
@@ -559,10 +623,10 @@ export function MapDashboard({ status }: { status: DataStatus }) {
           highlight={legendHighlight}
           fitPadding={fitPadding}
           onReady={setMap}
-          onSelectCluster={(id) => setSelection({ kind: "cluster", id })}
-          onSelectCell={(id) => setSelection({ kind: "cell", id })}
-          onSelectHotspot={(id, point) => setSelection({ kind: "hotspot", id, point })}
-          onSelectRegion={focusRegion}
+          onSelectCluster={selectCluster}
+          onSelectCell={selectCell}
+          onSelectHotspot={selectHotspot}
+          onSelectRegion={selectRegion}
         />
       </div>
 
@@ -763,7 +827,7 @@ export function MapDashboard({ status }: { status: DataStatus }) {
             <PredictionTimeline
               baseDate={status.tanggal_data}
               value={filters.prediksi}
-              onChange={(prediksi) => setFilters({ prediksi })}
+              onChange={changePrediction}
               playing={playing}
               onPlayingChange={setPlaying}
               loading={tierLoading}
@@ -775,7 +839,7 @@ export function MapDashboard({ status }: { status: DataStatus }) {
 
       <DetailPanel
         open={detail !== null}
-        onClose={() => setSelection(null)}
+        onClose={closeDetail}
         desktop={desktop}
         eyebrow={detail?.eyebrow ?? ""}
         title={detail?.title ?? ""}

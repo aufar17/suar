@@ -3,6 +3,7 @@
 import { ChevronRight, MapPinOff } from "lucide-react";
 import { motion } from "motion/react";
 import Link from "next/link";
+import { memo } from "react";
 import { RiskBadge } from "@/components/ui/risk-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/state";
@@ -20,7 +21,7 @@ const BAR_CLASSES: Record<RiskLevel, string> = {
 };
 
 /** The five most at-risk regencies/cities (by mean risk score) for the selected target date. */
-export function TopRegions({
+export const TopRegions = memo(function TopRegions({
   stats,
   highlight,
   error,
@@ -109,4 +110,4 @@ export function TopRegions({
       })}
     </ol>
   );
-}
+});

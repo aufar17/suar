@@ -2,7 +2,7 @@
 
 import type { Map as MaplibreMap, PaddingOptions } from "maplibre-gl";
 import { Locate, Minus, Plus } from "lucide-react";
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { INDONESIA_BBOX } from "@/lib/geo";
@@ -46,7 +46,7 @@ function ControlButton({
  * regular, keyboard-focusable buttons; the map itself also pans with arrow keys and
  * zooms with +/− once focused.
  */
-export function MapControls({
+export const MapControls = memo(function MapControls({
   map,
   home = INDONESIA_BBOX,
   homeLabel = "Kembali ke seluruh Indonesia",
@@ -80,4 +80,4 @@ export function MapControls({
       </ControlButton>
     </div>
   );
-}
+});

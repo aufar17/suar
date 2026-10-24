@@ -7,6 +7,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import MapGL from "react-map-gl/maplibre";
 import type { Theme } from "@/components/ui/theme";
 import { INDONESIA_BBOX } from "@/lib/geo";
+import { prefersReducedMotion } from "@/lib/use-media-query";
 import type { BBox } from "@/types";
 import { loadBasemap, type Basemap, type MapFonts } from "./basemap";
 import { bboxToBounds } from "./bounds";
@@ -53,6 +54,8 @@ export interface MapViewProps {
   children?: ReactNode;
   /** Initial extent; defaults to the whole country. */
   bbox?: BBox;
+  /** Initial center and zoom (e.g. from a shared link); takes precedence over `bbox`. */
+  initialView?: { center: [number, number]; zoom: number } | null;
   /** Accessible description of the map. */
   label: string;
   theme: Theme;
@@ -71,6 +74,7 @@ export interface MapViewProps {
 export function MapView({
   children,
   bbox = INDONESIA_BBOX,
+  initialView = null,
   label,
   theme,
   onReady,
@@ -92,7 +96,13 @@ export function MapView({
           mapStyle={basemap.style}
           // Swap the whole style on theme change; diffing would also strip the data layers.
           styleDiffing={false}
-          initialViewState={{ bounds: bboxToBounds(bbox), fitBoundsOptions: { padding: fitPadding } }}
+          initialViewState={
+            initialView
+              ? { longitude: initialView.center[0], latitude: initialView.center[1], zoom: initialView.zoom }
+              : { bounds: bboxToBounds(bbox), fitBoundsOptions: { padding: fitPadding } }
+          }
+          // Label fade-in is the only animation inside the map; none with reduced motion.
+          fadeDuration={prefersReducedMotion() ? 0 : 300}
           minZoom={MAP_MIN_ZOOM}
           maxZoom={MAP_MAX_ZOOM}
           maxBounds={maxBounds}

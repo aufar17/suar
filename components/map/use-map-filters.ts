@@ -62,16 +62,54 @@ export function serializeFilters(filters: MapFilters): string {
   return params.toString();
 }
 
-/** Filter state stored in the URL so a map view can be shared as a link. */
+/** Map position in the URL: `peta=zoom/lat/lon` (like OpenStreetMap's `map=`). */
+export interface MapViewParam {
+  zoom: number;
+  center: [number, number];
+}
+
+const VIEW_PARAM = "peta";
+
+export function parseMapView(value: string | null): MapViewParam | null {
+  const parts = value?.split("/").map(Number);
+  if (!parts || parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) return null;
+  const [zoom, lat, lon] = parts;
+  if (zoom < 0 || zoom > 22 || Math.abs(lat) > 85 || Math.abs(lon) > 180) return null;
+  return { zoom, center: [lon, lat] };
+}
+
+function replaceQuery(params: URLSearchParams) {
+  const query = params.toString();
+  // Native history updates are synced with useSearchParams without a server round trip.
+  window.history.replaceState(null, "", query ? `?${query}` : window.location.pathname);
+}
+
+/**
+ * Writes the map position to the URL (call once the map has settled, not while it moves),
+ * so a shared link opens the same view.
+ */
+export function writeMapView({ zoom, center: [lon, lat] }: MapViewParam) {
+  const params = new URLSearchParams(window.location.search);
+  params.set(VIEW_PARAM, `${zoom.toFixed(2)}/${lat.toFixed(4)}/${lon.toFixed(4)}`);
+  replaceQuery(params);
+}
+
+/**
+ * Filter state stored in the URL so a map view can be shared as a link. The filters only
+ * change identity when a filter changes (not when the map position in the URL does).
+ */
 export function useMapFilters() {
   const searchParams = useSearchParams();
-  const filters = useMemo(() => parseFilters(new URLSearchParams(searchParams.toString())), [searchParams]);
+  const filterQuery = serializeFilters(parseFilters(new URLSearchParams(searchParams.toString())));
+  const filters = useMemo(() => parseFilters(new URLSearchParams(filterQuery)), [filterQuery]);
+  const view = searchParams.get(VIEW_PARAM);
 
   const setFilters = useCallback(
     (patch: Partial<MapFilters>) => {
-      const query = serializeFilters({ ...filters, ...patch });
-      // Native history updates are synced with useSearchParams without a server round trip.
-      window.history.replaceState(null, "", query ? `?${query}` : window.location.pathname);
+      const params = new URLSearchParams(serializeFilters({ ...filters, ...patch }));
+      const current = new URLSearchParams(window.location.search).get(VIEW_PARAM);
+      if (current) params.set(VIEW_PARAM, current);
+      replaceQuery(params);
     },
     [filters],
   );
@@ -84,5 +122,5 @@ export function useMapFilters() {
     [filters.lapisan, setFilters],
   );
 
-  return { filters, setFilters, toggleLayer };
+  return { filters, setFilters, toggleLayer, view };
 }

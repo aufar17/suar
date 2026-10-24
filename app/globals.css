@@ -41,7 +41,7 @@
   --ember-soft: #fff1e8;
 
   /* Floating panels over the map. */
-  --glass: rgb(255 255 255 / 0.82);
+  --glass: rgb(255 255 255 / 0.94);
   --shadow-color: 240 6% 10%;
 
   /* Risk scale. "rendah" is transparent on the map; badges use a neutral chip. */
@@ -106,7 +106,7 @@
   --ember-ink: #f97a3c;
   --ember-soft: #2a160c;
 
-  --glass: rgb(19 19 22 / 0.78);
+  --glass: rgb(19 19 22 / 0.93);
   --shadow-color: 0 0% 0%;
 
   --risk-rendah-chip: #27272a;
@@ -246,13 +246,12 @@
   }
 }
 
-/* Translucent panel floating over the map. */
+/* Panel floating over the map: an almost opaque fill, no backdrop-filter. A blur would make
+   the browser re-composite the panel on every frame while the WebGL map underneath moves. */
 @utility glass-panel {
   background: var(--glass);
   border: 1px solid var(--border);
   box-shadow: var(--shadow-panel);
-  -webkit-backdrop-filter: blur(16px) saturate(1.4);
-  backdrop-filter: blur(16px) saturate(1.4);
 }
 
 @media (prefers-reduced-motion: reduce) {

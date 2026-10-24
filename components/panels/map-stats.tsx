@@ -1,7 +1,7 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import { CountUp } from "@/components/ui/count-up";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -19,7 +19,7 @@ export interface MapStat {
 }
 
 /** Compact stat tiles for the floating map panel (2×2) and the mobile drawer. */
-export function MapStats({ items, className }: { items: MapStat[]; className?: string }) {
+export const MapStats = memo(function MapStats({ items, className }: { items: MapStat[]; className?: string }) {
   return (
     <dl className={cn("grid grid-cols-2 gap-2", className)}>
       {items.map((item) => (
@@ -50,4 +50,4 @@ export function MapStats({ items, className }: { items: MapStat[]; className?: s
       ))}
     </dl>
   );
-}
+});

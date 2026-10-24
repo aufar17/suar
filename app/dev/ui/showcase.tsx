@@ -205,7 +205,7 @@ export function UiShowcase() {
           <Card className="glass-panel">
             <CardHeader>
               <CardTitle>Panel kaca</CardTitle>
-              <CardDescription>Latar semi-transparan + blur untuk panel di atas peta</CardDescription>
+              <CardDescription>Latar hampir pekat tanpa blur untuk panel di atas peta</CardDescription>
             </CardHeader>
           </Card>
         </div>
