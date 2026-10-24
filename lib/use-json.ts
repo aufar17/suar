@@ -2,8 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-// Responses only change about once a day, so they are kept for the lifetime of the tab.
+// Responses only change about once a day, so they are kept for the lifetime of the tab, up to
+// a limit: map views request many areas (risk grid), and the oldest responses are dropped.
+const MAX_CACHED = 60;
 const responseCache = new Map<string, unknown>();
+
+function remember(url: string, data: unknown) {
+  responseCache.delete(url);
+  responseCache.set(url, data);
+  while (responseCache.size > MAX_CACHED) responseCache.delete(responseCache.keys().next().value!);
+}
 
 async function readError(response: Response): Promise<string> {
   try {
@@ -26,7 +34,7 @@ export function prefetchJson(url: string): Promise<unknown> {
     .then(async (response) => {
       if (!response.ok) throw new Error(await readError(response));
       const data: unknown = await response.json();
-      responseCache.set(url, data);
+      remember(url, data);
       return data;
     })
     .finally(() => pending.delete(url));
@@ -56,7 +64,7 @@ export function useJson<T>(url: string | null): JsonState<T> {
         return (await response.json()) as T;
       })
       .then((data) => {
-        responseCache.set(url, data);
+        remember(url, data);
         setState({ url, data });
       })
       .catch((error: unknown) => {

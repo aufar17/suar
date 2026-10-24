@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, CalendarClock, Flame, Gauge, MapPin, Ruler, Satellite, ShieldCheck, Timer, type LucideIcon } from "lucide-react";
+import { ArrowRight, CalendarClock, Flame, Gauge, MapPin, RotateCw, Ruler, Satellite, ShieldCheck, Timer, type LucideIcon } from "lucide-react";
 import { motion } from "motion/react";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -13,6 +13,8 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorState } from "@/components/ui/state";
 import { diffDaysIso, formatDate, formatDateTime, formatDecimal, formatInteger } from "@/lib/format";
 import {
   CLUSTER_STATUS_DESCRIPTIONS,
@@ -74,6 +76,38 @@ export function DetailPanel({
         </div>
       </DrawerContent>
     </Drawer>
+  );
+}
+
+/** Placeholder with the shape of a detail body while the details of a map object load. */
+export function DetailSkeleton() {
+  return (
+    <div role="status" aria-label="Memuat detail" className="flex flex-col gap-6">
+      <div className="flex flex-col gap-2">
+        <Skeleton className="h-3 w-28" />
+        <Skeleton className="h-10 w-40 rounded-lg" />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {Array.from({ length: 6 }, (_, i) => (
+          <Skeleton key={i} className="h-[58px] rounded-xl" />
+        ))}
+      </div>
+      <Skeleton className="h-10 w-full rounded-lg" />
+    </div>
+  );
+}
+
+export function DetailError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <ErrorState
+      title="Detail tidak dapat dimuat"
+      className="px-0"
+      retry={
+        <Button variant="outline" onClick={onRetry}>
+          <RotateCw /> Coba lagi
+        </Button>
+      }
+    />
   );
 }
 

@@ -10,7 +10,7 @@ import { formatDate, formatDecimal, formatInteger } from "@/lib/format";
 import { CLUSTER_STATUS_LABELS, CONFIDENCE_LABELS } from "@/lib/labels";
 import { getRiskLabel, RISK_LEVEL_ORDER, RISK_THRESHOLDS } from "@/lib/risk";
 import { cn } from "@/lib/utils";
-import { CLUSTER_STATUSES, CONFIDENCE_LEVELS, type ClusterStatus, type Confidence, type RiskLevel } from "@/types";
+import { CLUSTER_STATUSES, CONFIDENCE_LEVELS, type ClusterStatus, type Confidence, type RiskLevel } from "@/types/constants";
 import { GroupGlyph, HotspotGlyph, LineGlyph, PeatGlyph, ZoneStatusGlyph } from "./legend-icons";
 import { GRID_MIN_ZOOM, HOTSPOT_OPACITY, hotspotRadius, REGENCY_MIN_ZOOM, ZONE_STYLES, type MapTier } from "./styles";
 import type { LayerKey } from "./use-map-filters";

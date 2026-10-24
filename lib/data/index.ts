@@ -7,9 +7,9 @@ import type {
   BoundaryQuery,
   ClusterQuery,
   DataSource,
+  AreaFilter,
   HotspotQuery,
   RegionStatsQuery,
-  RiskQuery,
   TrendQuery,
 } from "./types";
 
@@ -30,16 +30,28 @@ export async function getHotspots(query: HotspotQuery) {
   return source().getHotspots(query);
 }
 
+export async function getHotspot(id: string) {
+  "use cache";
+  cacheLife("hours");
+  return source().getHotspot(id);
+}
+
 export async function getClusters(query: ClusterQuery) {
   "use cache";
   cacheLife("hours");
   return source().getClusters(query);
 }
 
-export async function getRiskCells(query: RiskQuery) {
+export async function getRiskGrid(query: AreaFilter) {
   "use cache";
   cacheLife("hours");
-  return source().getRiskCells(query);
+  return source().getRiskGrid(query);
+}
+
+export async function getRiskCell(cellId: string, targetDate: string) {
+  "use cache";
+  cacheLife("hours");
+  return source().getRiskCell(cellId, targetDate);
 }
 
 export async function getRegions() {
@@ -52,12 +64,6 @@ export async function getRegionBoundaries(query: BoundaryQuery) {
   "use cache";
   cacheLife("hours");
   return source().getRegionBoundaries(query);
-}
-
-export async function getProvinceLines() {
-  "use cache";
-  cacheLife("hours");
-  return source().getProvinceLines();
 }
 
 export async function getRegionDetail(slug: string) {

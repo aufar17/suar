@@ -1,7 +1,6 @@
 "use client";
 
 import { Layer, Source } from "react-map-gl/maplibre";
-import type { ProvinceLineCollection } from "@/types";
 import { slotId } from "./basemap";
 import { useMapStyle } from "./map-view";
 
@@ -13,7 +12,8 @@ export function ProvinceLineLayer({
   weight = 1.8,
   emphasis = false,
 }: {
-  data: ProvinceLineCollection | string;
+  /** URL of the province border lines (static file). */
+  data: string;
   visible?: boolean;
   minzoom?: number;
   weight?: number;

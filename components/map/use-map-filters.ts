@@ -2,7 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { useCallback, useMemo } from "react";
-import { CONFIDENCE_LEVELS, type Confidence } from "@/types";
+import { CONFIDENCE_LEVELS, type Confidence } from "@/types/constants";
 
 export const LAYER_KEYS = ["hotspot", "zona", "risiko", "batas", "gambut"] as const;
 export type LayerKey = (typeof LAYER_KEYS)[number];

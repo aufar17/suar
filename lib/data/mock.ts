@@ -20,6 +20,8 @@ import {
   type RegionStat,
   type RegionWeather,
   type RiskCellFeature,
+  type RiskGrid,
+  type RiskGridCell,
   type Satellite,
   type WeatherSnapshot,
 } from "@/types";
@@ -27,7 +29,6 @@ import type {
   MockClusters,
   MockGrid,
   MockHotspots,
-  MockProvinceLines,
   MockRegions,
   MockRisk,
   MockStatus,
@@ -58,7 +59,6 @@ const loadStatus = memo(() => readJson<MockStatus>("status.json"));
 const loadClusters = memo(() => readJson<MockClusters>("clusters.geojson"));
 const loadWeather = memo(() => readJson<MockWeather>("weather.json"));
 const loadRisk = memo(() => readJson<MockRisk>("risk.json"));
-const loadProvinceLines = memo(() => readJson<MockProvinceLines>("provinsi-garis.geojson"));
 
 // ---------------------------------------------------------------------------
 // Regions
@@ -71,6 +71,9 @@ interface RegionIndex {
   /** Regency slugs per province slug. */
   children: Map<string, string[]>;
 }
+
+// Every mock file is read and indexed once per server process (memo); requests only filter
+// the in-memory indexes (per province, per regency, per 1° bucket).
 
 const loadRegions = memo(async (): Promise<RegionIndex> => {
   const [provinces, regencies] = await Promise.all([
@@ -106,6 +109,8 @@ const GRID_BUCKET = 1; // degrees
 interface GridIndex {
   cellSize: number;
   ids: string[];
+  /** Cell index by id. */
+  byId: Map<string, number>;
   /** South-west corner of each cell. */
   lon: Float64Array;
   lat: Float64Array;
@@ -130,6 +135,7 @@ const loadGrid = memo(async (): Promise<GridIndex> => {
   const index: GridIndex = {
     cellSize: size,
     ids: new Array<string>(n),
+    byId: new Map(),
     lon: new Float64Array(n),
     lat: new Float64Array(n),
     kab: new Int32Array(n),
@@ -146,6 +152,7 @@ const loadGrid = memo(async (): Promise<GridIndex> => {
     const lon = Math.round((lon0 + col * size) * 1e4) / 1e4;
     const lat = Math.round((lat0 + row * size) * 1e4) / 1e4;
     index.ids[i] = `R${String(row).padStart(3, "0")}-C${String(col).padStart(4, "0")}`;
+    index.byId.set(index.ids[i], i);
     index.lon[i] = lon;
     index.lat[i] = lat;
     index.kab[i] = kab;
@@ -318,6 +325,37 @@ const loadHotspots = memo(async (): Promise<HotspotIndex> => {
   return { file, counts, monthly };
 });
 
+interface HotspotDayIndex {
+  /** Row indices of the day per province slug and per regency slug. */
+  byProv: Map<string, number[]>;
+  byKab: Map<string, number[]>;
+}
+
+const hotspotDayIndexes = new Map<number, HotspotDayIndex>();
+
+/** Rows of one day grouped by province and regency (built on first use). */
+function hotspotDayIndex(file: MockHotspots, day: number): HotspotDayIndex {
+  let index = hotspotDayIndexes.get(day);
+  if (!index) {
+    index = { byProv: new Map(), byKab: new Map() };
+    const push = (map: Map<string, number[]>, key: string, i: number) => {
+      const list = map.get(key);
+      if (list) list.push(i);
+      else map.set(key, [i]);
+    };
+    (file.days[day] ?? []).forEach((row, i) => {
+      push(index!.byProv, file.provinsi[row[6]], i);
+      push(index!.byKab, file.kabupaten[row[6]], i);
+    });
+    hotspotDayIndexes.set(day, index);
+  }
+  return index;
+}
+
+function hotspotId(date: string, index: number): string {
+  return `HS-${date.replaceAll("-", "")}-${String(index + 1).padStart(4, "0")}`;
+}
+
 function hotspotFeature(file: MockHotspots, date: string, index: number, row: HotspotRow): HotspotFeature {
   const [lon, lat, hhmm, sat, conf, frp, kab] = row;
   const time = String(hhmm).padStart(4, "0");
@@ -325,7 +363,7 @@ function hotspotFeature(file: MockHotspots, date: string, index: number, row: Ho
     type: "Feature",
     geometry: { type: "Point", coordinates: [lon, lat] },
     properties: {
-      id: `HS-${date.replaceAll("-", "")}-${String(index + 1).padStart(4, "0")}`,
+      id: hotspotId(date, index),
       waktu_deteksi: `${date}T${time.slice(0, 2)}:${time.slice(2)}:00+07:00`,
       satelit: file.satelit[sat] as Satellite,
       confidence: file.confidence[conf] as Confidence,
@@ -385,15 +423,35 @@ export const mockDataSource: DataSource = {
     const minRank = CONFIDENCE_RANK[minConfidence];
     const features: HotspotFeature[] = [];
     for (const date of eachDate(start, end)) {
-      const rows = file.days[diffDaysIso(date, file.start)] ?? [];
-      rows.forEach((row, index) => {
+      const day = diffDaysIso(date, file.start);
+      const rows = file.days[day] ?? [];
+      // A province or regency filter only walks that region's rows of the day.
+      const indices = area.kabupaten
+        ? (hotspotDayIndex(file, day).byKab.get(area.kabupaten) ?? [])
+        : area.provinsi
+          ? (hotspotDayIndex(file, day).byProv.get(area.provinsi) ?? [])
+          : null;
+      const add = (index: number) => {
+        const row = rows[index];
         if (row[4] < minRank) return;
         if (!inArea(area, file.provinsi[row[6]], file.kabupaten[row[6]])) return;
         if (area.bbox && !pointInBBox([row[0], row[1]], area.bbox)) return;
         features.push(hotspotFeature(file, date, index, row));
-      });
+      };
+      if (indices) for (const index of indices) add(index);
+      else for (let index = 0; index < rows.length; index++) add(index);
     }
     return { type: "FeatureCollection", features };
+  },
+
+  async getHotspot(id) {
+    const match = /^HS-(\d{4})(\d{2})(\d{2})-(\d{4})$/.exec(id);
+    if (!match) return null;
+    const { file } = await loadHotspots();
+    const date = `${match[1]}-${match[2]}-${match[3]}`;
+    const index = Number(match[4]) - 1;
+    const row = file.days[diffDaysIso(date, file.start)]?.[index];
+    return row ? hotspotFeature(file, date, index, row) : null;
   },
 
   async getClusters({ date, ...area }) {
@@ -409,9 +467,35 @@ export const mockDataSource: DataSource = {
     };
   },
 
-  async getRiskCells({ targetDate, ...area }) {
+  async getRiskGrid(area) {
+    const [risk, grid] = await Promise.all([loadRisk(), loadGrid()]);
+    const kabupaten: string[] = [];
+    const kabIndex = new Map<number, number>();
+    const sel = cellsInArea(grid, area).map((i): RiskGridCell => {
+      const k = grid.kab[i];
+      let ki = kabIndex.get(k);
+      if (ki === undefined) {
+        ki = kabupaten.length;
+        kabIndex.set(k, ki);
+        kabupaten.push(grid.kabSlugs[k]);
+      }
+      return [grid.ids[i], grid.lon[i], grid.lat[i], grid.gambut[i] === 1 ? 1 : 0, ki, ...risk.scores.map((day) => day[i])];
+    });
+    const result: RiskGrid = {
+      tanggal_prediksi: risk.tanggal_prediksi,
+      tanggal_target: risk.targets,
+      ukuran_sel: grid.cellSize,
+      kabupaten,
+      sel,
+    };
+    return result;
+  },
+
+  async getRiskCell(cellId, targetDate) {
     const grid = await loadGrid();
-    return { type: "FeatureCollection", features: await riskFeatures(targetDate, cellsInArea(grid, area)) };
+    const index = grid.byId.get(cellId);
+    if (index === undefined) return null;
+    return (await riskFeatures(targetDate, [index]))[0] ?? null;
   },
 
   async getRegions() {
@@ -427,8 +511,6 @@ export const mockDataSource: DataSource = {
       features: regions.regencies.features.filter((f) => f.properties.provinsi === provinsi),
     };
   },
-
-  getProvinceLines: loadProvinceLines,
 
   async getRegionDetail(slug) {
     const [regions, grid] = await Promise.all([loadRegions(), loadGrid()]);

@@ -5,12 +5,20 @@
  *
  * Source: geoBoundaries gbOpen IDN (simplified release) – ADM1 (provinces, OSM, ODbL) and
  * ADM2 (regencies/cities, BPS/OCHA, CC BY 3.0 IGO). Raw files are downloaded to `data-raw/`
- * (git-ignored) and processed with mapshaper into `mock/`:
+ * (git-ignored) and processed with mapshaper in two levels of detail:
  *
- *   mock/kabupaten.geojson      regencies/cities, clean topology (no gaps or overlaps)
- *   mock/provinsi.geojson       provinces, dissolved from the regencies and simplified further
- *   mock/provinsi-garis.geojson province borders drawn from the regency topology, so they line
- *                               up with the regency outlines at closer zoom levels
+ *   mock/kabupaten.geojson      regencies/cities, clean topology (no gaps or overlaps), for the server
+ *   mock/provinsi.geojson       provinces, dissolved from the regencies, for the server
+ *
+ *   public/geo/kabupaten.json        browser map (zoom ≥ 6): simplified further, < 1.5 MB
+ *   public/geo/provinsi.json         browser map (zoom < 6): coarsest, < 250 KB
+ *   public/geo/provinsi-garis.json   province borders from the browser regency topology, so they
+ *                                    line up with the regency outlines at closer zoom levels
+ *   public/geo/label-provinsi.json   label points (one per region, inside its polygon)
+ *   public/geo/label-kabupaten.json
+ *
+ * The browser files are static (cached by the browser, loaded by the map's worker) and carry
+ * only `slug`, `nama`, `level`, and `provinsi`.
  *
  * Provinces are dissolved from the regencies (each regency is assigned to the ADM1 province
  * that contains its interior point), so both levels always nest exactly.
@@ -22,6 +30,7 @@ import mapshaper from "mapshaper";
 const ROOT = process.cwd();
 const RAW_DIR = path.join(ROOT, "data-raw");
 const OUT_DIR = path.join(ROOT, "mock");
+const WEB_DIR = path.join(ROOT, "public", "geo");
 
 const SOURCES = {
   adm1: "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/IDN/ADM1/geoBoundaries-IDN-ADM1_simplified.geojson",
@@ -82,6 +91,12 @@ const PARENT_FIXES: Record<string, string> = { "Kepulauan Seribu": "ID-JK" };
 const KABUPATEN = { simplify: "30%", minIslandKm2: 1 };
 const PROVINSI = { simplify: "30%", minIsland: "12km2" };
 const PRECISION = "0.00001";
+// Browser files: simplified again (percent of the server vertices kept), 4 decimals (≈ 11 m).
+const WEB = {
+  kabupaten: { simplify: "55%", maxKb: 1500 },
+  provinsi: { simplify: "35%", minIsland: "40km2", maxKb: 250 },
+  precision: "0.0001",
+};
 
 type Position = [number, number];
 type Ring = Position[];
@@ -236,9 +251,6 @@ async function main() {
     "-clean gap-fill-area=60km2",
     "-each 'lx=this.innerX, ly=this.innerY, bbox=this.bounds'",
     `-o kab.json precision=${PRECISION}`,
-    // Province borders from the same topology (lines between regencies of different provinces).
-    "-innerlines where='A.provinsi != B.provinsi'",
-    `-o garis.json precision=${PRECISION}`,
   ].join(" ");
   const kabOut = await run(kabCommands, { "in.json": { type: "FeatureCollection", features: regencies } });
   const kab = JSON.parse(kabOut["kab.json"]) as Collection;
@@ -297,8 +309,58 @@ async function main() {
       .sort((a, b) => a.properties.slug.localeCompare(b.properties.slug)),
   };
 
+  // 4. Browser files: the regency topology simplified again; provinces dissolved from it and
+  //    simplified the most (they are only drawn below zoom 6).
+  const webProps = "slug,nama,level,provinsi";
+  const webKabOut = await run(
+    [
+      "-i kab.json",
+      `-simplify ${WEB.kabupaten.simplify} weighted keep-shapes`,
+      "-clean",
+      `-filter-fields ${webProps}`,
+      `-o web-kab.json precision=${WEB.precision}`,
+      // Province borders from the same topology (lines between regencies of different provinces).
+      "-innerlines where='A.provinsi != B.provinsi'",
+      `-o web-garis.json precision=${WEB.precision}`,
+    ].join(" "),
+    { "kab.json": kabOut["kab.json"] },
+  );
+  const webProvOut = await run(
+    [
+      "-i web-kab.json",
+      "-dissolve provinsi copy-fields=provinsi",
+      `-filter-islands min-area=${WEB.provinsi.minIsland} remove-empty`,
+      `-simplify ${WEB.provinsi.simplify} weighted keep-shapes`,
+      "-clean",
+      `-o web-prov.json precision=${WEB.precision}`,
+    ].join(" "),
+    { "web-kab.json": webKabOut["web-kab.json"] },
+  );
+  const webKab = JSON.parse(webKabOut["web-kab.json"]) as Collection;
+  const webProv = JSON.parse(webProvOut["web-prov.json"]) as Collection;
+  const sortBySlug = (features: RawFeature[]) =>
+    features.sort((a, b) => String(a.properties.slug).localeCompare(String(b.properties.slug)));
+  const webKabupaten = {
+    type: "FeatureCollection",
+    features: sortBySlug(
+      webKab.features.map((f) => ({
+        type: "Feature",
+        geometry: f.geometry,
+        properties: { slug: f.properties.slug, nama: f.properties.nama, level: f.properties.level, provinsi: f.properties.provinsi },
+      })),
+    ),
+  };
+  const webProvinsi = {
+    type: "FeatureCollection",
+    features: sortBySlug(
+      webProv.features.map((f) => {
+        const info = bySlug.get(String(f.properties.provinsi))!;
+        return { type: "Feature", geometry: f.geometry, properties: { slug: info.slug, nama: info.nama, level: "provinsi" } };
+      }),
+    ),
+  };
   // One MultiLineString keeps the file small; the lines are only drawn, never queried.
-  const lines = JSON.parse(kabOut["garis.json"]) as { geometries: { type: "LineString"; coordinates: Position[] }[] };
+  const lines = JSON.parse(webKabOut["web-garis.json"]) as { geometries: { type: "LineString"; coordinates: Position[] }[] };
   const garis = {
     type: "FeatureCollection",
     features: [
@@ -309,18 +371,38 @@ async function main() {
       },
     ],
   };
+  // Label points from the server geometry (always inside the region).
+  const labels = (collection: typeof kabupaten | typeof provinsi) => ({
+    type: "FeatureCollection",
+    features: collection.features.map((f) => ({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: f.properties.label },
+      properties: { slug: f.properties.slug, nama: f.properties.nama, level: f.properties.level, provinsi: f.properties.provinsi },
+    })),
+  });
 
-  fs.mkdirSync(OUT_DIR, { recursive: true });
-  const write = (name: string, data: unknown) => {
-    const file = path.join(OUT_DIR, name);
+  const write = (dir: string, name: string, data: unknown) => {
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, name);
     fs.writeFileSync(file, JSON.stringify(data));
     return fs.statSync(file).size;
   };
   const sizes = {
-    "provinsi.geojson": write("provinsi.geojson", provinsi),
-    "kabupaten.geojson": write("kabupaten.geojson", kabupaten),
-    "provinsi-garis.geojson": write("provinsi-garis.geojson", garis),
+    "mock/provinsi.geojson": write(OUT_DIR, "provinsi.geojson", provinsi),
+    "mock/kabupaten.geojson": write(OUT_DIR, "kabupaten.geojson", kabupaten),
+    "public/geo/provinsi.json": write(WEB_DIR, "provinsi.json", webProvinsi),
+    "public/geo/kabupaten.json": write(WEB_DIR, "kabupaten.json", webKabupaten),
+    "public/geo/provinsi-garis.json": write(WEB_DIR, "provinsi-garis.json", garis),
+    "public/geo/label-provinsi.json": write(WEB_DIR, "label-provinsi.json", labels(provinsi)),
+    "public/geo/label-kabupaten.json": write(WEB_DIR, "label-kabupaten.json", labels(kabupaten)),
   };
+  const tooLarge = [
+    ["public/geo/kabupaten.json", WEB.kabupaten.maxKb],
+    ["public/geo/provinsi.json", WEB.provinsi.maxKb],
+  ] as const;
+  for (const [name, maxKb] of tooLarge) {
+    if (sizes[name] > maxKb * 1024) console.warn(`Peringatan: ${name} lebih dari ${maxKb} KB`);
+  }
 
   const perProvince = new Map<string, number>();
   for (const f of kabupaten.features) {
@@ -332,7 +414,7 @@ async function main() {
     `Kabupaten/kota  : ${kabupaten.features.length} (kota ${kabupaten.features.filter((f) => f.properties.level === "kota").length}; ${fallback} tanpa tumpang tindih ADM1, memakai titik dalam/terdekat)`,
   );
   console.log(`Per provinsi    : ${[...perProvince.entries()].map(([k, n]) => `${k} ${n}`).join(", ")}`);
-  for (const [name, size] of Object.entries(sizes)) console.log(`  mock/${name.padEnd(24)} ${(size / 1024).toFixed(0).padStart(6)} KB`);
+  for (const [name, size] of Object.entries(sizes)) console.log(`  ${name.padEnd(32)} ${(size / 1024).toFixed(0).padStart(6)} KB`);
 }
 
 main().catch((error: unknown) => {

@@ -5,24 +5,21 @@ import { useMemo } from "react";
 import { Layer, Source } from "react-map-gl/maplibre";
 import { formatDecimal, formatInteger } from "@/lib/format";
 import { regionDisplayName } from "@/lib/labels";
-import { getRiskColor, getRiskLabel, getRiskLevel, RISK_LEVEL_ORDER } from "@/lib/risk";
-import type { BoundaryTier, RegionBoundaryCollection, RegionLevel, RegionStat, RiskLevel } from "@/types";
+import { getRiskColor, getRiskLabel, getRiskLevel } from "@/lib/risk";
+import type { BoundaryTier, RegionLevel, RegionStat, RiskLevel } from "@/types";
 import { slotId } from "./basemap";
-import { HOVER, TRANSPARENT, zoomRange } from "./expressions";
+import { hasStateLevel, HOVER, levelIndex, riskFillColor, zoomRange } from "./expressions";
 import { escapeHtml, swatchHtml, tooltipHtml } from "./hover";
 import { useLayerInteraction } from "./interactions";
 import { useMapStyle } from "./map-view";
+import { regionFillLayer, regionSource } from "./map-queries";
 import { CHOROPLETH_FILL } from "./styles";
 import { useFeatureStates, type FeatureStates } from "./use-feature-state";
 
-/** Risk level as a number in feature-state (0 = rendah … 3 = sangat tinggi). */
-const LEVEL: ExpressionSpecification = ["coalesce", ["feature-state", "level"], -1];
-const levelIndex = (level: RiskLevel) => RISK_LEVEL_ORDER.indexOf(level);
-
 export interface RegionLayersProps {
   level: BoundaryTier;
-  /** Boundaries, or the URL of a static GeoJSON file (loaded by the map's worker). */
-  data: RegionBoundaryCollection | string;
+  /** URL of the static boundary file (see GEO_FILES), loaded by the map's worker. */
+  data: string;
   /** Only the regions of this province (region pages). */
   provinsi?: string;
   /** Zoom range of the fill and its outline, [min, max). */
@@ -63,11 +60,6 @@ interface RegionFeatureProps {
   provinsi?: string | null;
 }
 
-/** Fill layer id of a level: hover/click target, and used to find the region at a point. */
-export function regionFillLayer(level: BoundaryTier) {
-  return `wilayah-${level}-isi`;
-}
-
 /**
  * Provinces or regencies from one GeoJSON source (`promoteId: slug`): risk fill, its outline,
  * boundary lines, and the focus outline. The risk level of each region lives in feature-state,
@@ -95,7 +87,7 @@ export function RegionLayers({
   onSelect,
 }: RegionLayersProps) {
   const { theme, colors } = useMapStyle();
-  const source = `wilayah-${level}`;
+  const source = regionSource(level);
   const fillLayer = regionFillLayer(level);
   const filter: FilterSpecification | undefined = provinsi ? ["==", ["get", "provinsi"], provinsi] : undefined;
 
@@ -105,22 +97,8 @@ export function RegionLayers({
   }, [stats]);
   useFeatureStates(source, states);
 
-  // "Rendah" stays unfilled so most of the land keeps the basemap visible.
-  const levelColor: ExpressionSpecification = [
-    "match",
-    LEVEL,
-    levelIndex("sedang"),
-    getRiskColor("sedang", theme),
-    levelIndex("tinggi"),
-    getRiskColor("tinggi", theme),
-    levelIndex("sangat_tinggi"),
-    getRiskColor("sangat_tinggi", theme),
-    TRANSPARENT,
-  ];
-  const fillColor: ExpressionSpecification = onlyLevel
-    ? ["case", ["==", LEVEL, levelIndex(onlyLevel)], levelColor, TRANSPARENT]
-    : levelColor;
-  const isHighlighted: ExpressionSpecification = ["==", LEVEL, highlightLevel ? levelIndex(highlightLevel) : -2];
+  const fillColor = riskFillColor(theme, onlyLevel);
+  const isHighlighted = hasStateLevel(highlightLevel);
   const isStrong: ExpressionSpecification = ["==", ["get", "slug"], emphasize ?? ""];
   const focusFilter: FilterSpecification = ["==", ["get", "slug"], focus ?? ""];
 
@@ -218,23 +196,6 @@ export function RegionLayers({
   );
 }
 
-export interface RegionLabelPoints {
-  type: "FeatureCollection";
-  features: { type: "Feature"; geometry: { type: "Point"; coordinates: [number, number] }; properties: { slug: string; nama: string; level: RegionLevel; provinsi: string | null } }[];
-}
-
-/** Label points of a boundary collection (each region's `label` position). */
-export function labelPoints(data: RegionBoundaryCollection): RegionLabelPoints {
-  return {
-    type: "FeatureCollection",
-    features: data.features.map((f) => ({
-      type: "Feature",
-      geometry: { type: "Point", coordinates: f.properties.label },
-      properties: { slug: f.properties.slug, nama: f.properties.nama, level: f.properties.level, provinsi: f.properties.provinsi },
-    })),
-  };
-}
-
 /** Region names at their label points: provinces at every zoom, regencies from zoom 6.5. */
 export function RegionLabelLayer({
   level,
@@ -242,8 +203,8 @@ export function RegionLabelLayer({
   provinsi,
 }: {
   level: BoundaryTier;
-  /** Label points, or the URL of a static GeoJSON file of them. */
-  data: RegionLabelPoints | string;
+  /** URL of the static label points (see GEO_FILES). */
+  data: string;
   provinsi?: string;
 }) {
   const { colors, fonts } = useMapStyle();

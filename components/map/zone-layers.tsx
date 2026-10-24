@@ -3,7 +3,8 @@
 import { Layer, Source } from "react-map-gl/maplibre";
 import { formatDecimal, formatInteger } from "@/lib/format";
 import { CLUSTER_STATUS_LABELS } from "@/lib/labels";
-import { CLUSTER_STATUSES, type ClusterCollection, type ClusterProps, type ClusterStatus } from "@/types";
+import type { ClusterCollection, ClusterProps, ClusterStatus } from "@/types";
+import { CLUSTER_STATUSES } from "@/types/constants";
 import { slotId } from "./basemap";
 import { HOVER } from "./expressions";
 import { escapeHtml, tooltipHtml } from "./hover";

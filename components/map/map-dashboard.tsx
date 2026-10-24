@@ -20,7 +20,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FilterControls, RANGE_LABELS, type LayerOption } from "@/components/filters/filter-panel";
 import { PredictionTimeline } from "@/components/filters/prediction-day";
-import { ClusterDetail, DetailPanel, HotspotDetail } from "@/components/panels/detail-panel";
+import { ClusterDetail, DetailError, DetailPanel, DetailSkeleton, HotspotDetail } from "@/components/panels/detail-panel";
 import { MapStats, type MapStat } from "@/components/panels/map-stats";
 import { CellDetail } from "@/components/panels/risk-detail";
 import { TopRegions } from "@/components/panels/top-regions";
@@ -28,27 +28,25 @@ import { Button } from "@/components/ui/button";
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { addDaysIso, formatDayShort, formatDecimal, formatInteger } from "@/lib/format";
-import { bboxContains, bboxIntersects, limitBBox, pointInBBox, ringBBox } from "@/lib/geo";
+import { bboxContains, bboxIntersects, limitBBox, MAX_GRID_BBOX_DEG2, pointInBBox } from "@/lib/geo";
 import { regionDisplayName, regionHref } from "@/lib/labels";
 import { getRiskLabel, getRiskLevel } from "@/lib/risk";
 import { prefetchJson, useJson } from "@/lib/use-json";
 import { prefersReducedMotion, useIsDesktop, useMediaQuery } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
-import {
-  CLUSTER_STATUSES,
-  CONFIDENCE_LEVELS,
-  type BBox,
-  type ClusterCollection,
-  type DataStatus,
-  type HotspotCollection,
-  type ProvinceLineCollection,
-  type Region,
-  type RegionBoundaryCollection,
-  type RegionIndexItem,
-  type RegionStat,
-  type RegionWeather,
-  type RiskCellCollection,
-  type RiskLevel,
+import { CLUSTER_STATUSES } from "@/types/constants";
+import type {
+  BBox,
+  ClusterCollection,
+  DataStatus,
+  HotspotFeature,
+  Region,
+  RegionIndexItem,
+  RegionStat,
+  RegionWeather,
+  RiskCellFeature,
+  RiskGrid,
+  RiskLevel,
 } from "@/types";
 import { bboxToBounds } from "./bounds";
 import { FOCUS_REGION_EVENT } from "./focus-region";
@@ -57,11 +55,13 @@ import { MapControls } from "./map-controls";
 import { MapLegend, MapLegendDrawer, type LegendCounts, type LegendHighlight, type LegendProps } from "./map-legend";
 import { MapSkeleton } from "./map-skeleton";
 import { MapStatus, type MapStatusItem } from "./map-status";
-import { HOTSPOT_GROUP_LAYER } from "./hotspot-layers";
-import { regionFillLayer } from "./region-layers";
-import { selectionShape, type MapSelection, type SelectedFeature } from "./selection";
+import { GEO_FILES } from "./geo-files";
+import { HOTSPOT_SOURCE, readCenterRegency, readHotspotCounts, regionSource, sameHotspotCounts } from "./map-queries";
+import { cellRing, cellScore, gridDay } from "./risk-grid";
+import type { MapSelection, SelectionShape } from "./selection";
 import { DEFAULT_RISK_OPACITY, REGENCY_MIN_ZOOM, tierOf } from "./styles";
 import { useMapIdleValue } from "./use-map-idle";
+import { useSourceStatus } from "./use-source-status";
 import { PREDICTION_DAYS, useMapFilters } from "./use-map-filters";
 import { snapBBox, useMapViewport } from "./use-map-viewport";
 
@@ -78,17 +78,25 @@ const LAYERS: LayerOption[] = [
   { key: "gambut", label: "Lahan gambut", description: "Tampil saat peta diperbesar", icon: <PeatGlyph /> },
 ];
 
-/** Largest bbox the grid endpoint accepts (square degrees). */
-const MAX_GRID_AREA = 24;
 
 /** Time each prediction day stays on screen while the timeline plays. */
 const PLAY_STEP_MS = 1100;
 
 const statsUrl = (level: "provinsi" | "kabupaten", query: string) => `/api/stats/regions?level=${level}&${query}`;
-const riskUrl = (targetDate: string, bbox: string) => `/api/risk?target_date=${targetDate}&bbox=${bbox}`;
 
 function sum<T>(items: T[], value: (item: T) => number) {
   return items.reduce((total, item) => total + value(item), 0);
+}
+
+/**
+ * Area of the grid request for a view: the view plus a margin, snapped to a 0.5° grid so small
+ * pans reuse the response; without the margin (0.25° grid) when that would be too large.
+ */
+function gridRequestArea(view: BBox): BBox {
+  const padded = snapBBox(view, 0.5, 0.15);
+  const area = (b: BBox) => (b[2] - b[0]) * (b[3] - b[1]);
+  if (area(padded) <= MAX_GRID_BBOX_DEG2) return padded;
+  return limitBBox(snapBBox(view, 0.25, 0), MAX_GRID_BBOX_DEG2);
 }
 
 function byKey<T extends { slug: string }>(items: T[] | undefined) {
@@ -140,32 +148,35 @@ export function MapDashboard({ status }: { status: DataStatus }) {
     setRegenciesWanted(true);
   }
 
-  const provinces = useJson<RegionBoundaryCollection>("/api/regions?level=provinsi");
-  const regencies = useJson<RegionBoundaryCollection>(regenciesWanted ? "/api/regions?level=kabupaten" : null);
-  const provinceLines = useJson<ProvinceLineCollection>(regenciesWanted ? "/api/regions/lines" : null);
+  // Boundaries are static files loaded by the map itself; only their load state is tracked here.
+  const provinces = useSourceStatus(map, regionSource("provinsi"), GEO_FILES.provinsi);
+  const regencies = useSourceStatus(map, regionSource("kabupaten"), regenciesWanted ? GEO_FILES.kabupaten : null);
   const provinceStats = useJson<RegionStat[]>(statsUrl("provinsi", statsQuery(targetDate)));
   const regencyStats = useJson<RegionStat[]>(statsUrl("kabupaten", statsQuery(targetDate)));
   const clusters = useJson<ClusterCollection>(`/api/clusters?date=${end}`);
   const weather = useJson<RegionWeather[]>("/api/weather");
 
-  // Hotspots of the whole country: the map groups them itself (clustered source). While the
-  // layer is off nothing is requested and the last data stays on the (hidden) source.
-  const hotspots = useJson<HotspotCollection>(hotspotsOn ? `/api/hotspots?${hotspotQuery}` : null);
-  const hotspotFeatures = useMemo(() => hotspots.data?.features ?? [], [hotspots.data]);
+  // Hotspots of the whole country, grouped by the map itself (clustered source). The URL goes
+  // straight to the source, so MapLibre's worker fetches and parses it. While the layer is off
+  // nothing new is requested and the last data stays on the (hidden) source.
+  const hotspotUrl = `/api/hotspots?${hotspotQuery}`;
+  const [shownHotspotUrl, setShownHotspotUrl] = useState<string | null>(null);
+  if (hotspotsOn && shownHotspotUrl !== hotspotUrl) setShownHotspotUrl(hotspotUrl);
+  const hotspots = useSourceStatus(map, HOTSPOT_SOURCE, shownHotspotUrl);
 
-  // Risk grid: only from zoom 8, for the settled view. The requested area is kept while the
-  // view stays inside it, so small pans do not refetch; a new request aborts the previous one.
-  const gridArea = near && viewport ? limitBBox(snapBBox(viewport.bbox, 0.5, 0.15), MAX_GRID_AREA) : null;
+  // Risk grid: only from zoom 8, for the settled view, with every prediction day in one
+  // response. The requested area is kept while the view stays inside it, so small pans do not
+  // refetch; a new request aborts the previous one (useJson).
+  const gridArea = near && viewport ? gridRequestArea(viewport.bbox) : null;
   const [gridBBox, setGridBBox] = useState<BBox | null>(null);
   if (gridArea && viewport && (!gridBBox || !bboxContains(gridBBox, viewport.bbox)) && gridArea.join() !== gridBBox?.join()) {
     setGridBBox(gridArea);
   }
-  const gridQuery = near && gridBBox ? gridBBox.join(",") : null;
-  const risk = useJson<RiskCellCollection>(gridQuery ? riskUrl(targetDate, gridQuery) : null);
-  const riskData = near ? risk.data : undefined;
+  const grid = useJson<RiskGrid>(near && gridBBox ? `/api/risk/grid?bbox=${gridBBox.join(",")}` : null);
+  const gridData = near ? grid.data : undefined;
 
   // While playing, step to the next day once the current one has loaded and been shown.
-  const tierLoading = near ? risk.loading : (tier === "provinsi" ? provinceStats : regencyStats).loading;
+  const tierLoading = near ? grid.loading : (tier === "provinsi" ? provinceStats : regencyStats).loading;
   useEffect(() => {
     if (!playing || tierLoading) return;
     const day = filters.prediksi;
@@ -178,12 +189,13 @@ export function MapDashboard({ status }: { status: DataStatus }) {
 
   const setPlaying = (next: boolean) => {
     if (next) {
-      // Load every prediction day up front so playback does not stall between days.
+      // Load the regional averages of every day up front so playback does not stall between
+      // days (the grid already holds every day).
       for (const day of PREDICTION_DAYS) {
         const date = addDaysIso(status.tanggal_data, day);
-        const urls = [statsUrl("provinsi", statsQuery(date)), statsUrl("kabupaten", statsQuery(date))];
-        if (gridQuery) urls.push(riskUrl(date, gridQuery));
-        for (const url of urls) prefetchJson(url).catch(() => {});
+        for (const url of [statsUrl("provinsi", statsQuery(date)), statsUrl("kabupaten", statsQuery(date))]) {
+          prefetchJson(url).catch(() => {});
+        }
       }
       if (filters.prediksi >= PREDICTION_DAYS.length) setFilters({ prediksi: 1 });
     }
@@ -243,12 +255,7 @@ export function MapDashboard({ status }: { status: DataStatus }) {
 
   // The regency in the middle of the map (read from the rendered map once it is idle): the
   // summary describes it up close, and its province at regency zoom levels.
-  const centerSlug = useMapIdleValue(map, (m) => {
-    const layer = regionFillLayer("kabupaten");
-    if (m.getZoom() < REGENCY_MIN_ZOOM || !m.getLayer(layer)) return null;
-    const feature = m.queryRenderedFeatures(m.project(m.getCenter()), { layers: [layer] })[0];
-    return feature ? String(feature.properties.slug) : null;
-  });
+  const centerSlug = useMapIdleValue(map, (m) => readCenterRegency(m, REGENCY_MIN_ZOOM));
   const centerRegion = useMemo((): Region | null => {
     if (tier === "provinsi" || !centerSlug) return null;
     const regency = indexBySlug?.[centerSlug];
@@ -262,22 +269,30 @@ export function MapDashboard({ status }: { status: DataStatus }) {
   const contextSource = focusItem ? "dipilih" : centerRegion ? "di tengah peta" : "seluruh wilayah";
 
   // Selection ------------------------------------------------------------------------------
-  const selected = useMemo((): SelectedFeature | null => {
-    if (selection?.kind === "cluster") {
-      const feature = clusters.data?.features.find((f) => f.properties.id === selection.id);
-      return feature ? { kind: "cluster", feature } : null;
-    }
+  // The map only holds what it draws; the details of a clicked hotspot or cell are loaded
+  // separately (a cell follows the prediction day).
+  const hotspotDetail = useJson<HotspotFeature>(
+    selection?.kind === "hotspot" ? `/api/hotspots/${encodeURIComponent(selection.id)}` : null,
+  );
+  const cellDetail = useJson<RiskCellFeature>(
+    selection?.kind === "cell" ? `/api/risk/cell?cell_id=${encodeURIComponent(selection.id)}&target_date=${targetDate}` : null,
+  );
+  const selectedZone =
+    selection?.kind === "cluster" ? (clusters.data?.features.find((f) => f.properties.id === selection.id) ?? null) : null;
+  const selectedHotspot =
+    selection?.kind === "hotspot" && hotspotDetail.data?.properties.id === selection.id ? hotspotDetail.data : null;
+  const selectedCell = selection?.kind === "cell" && cellDetail.data?.properties.cell_id === selection.id ? cellDetail.data : null;
+
+  const selectedShape = useMemo((): SelectionShape | null => {
+    if (selection?.kind === "hotspot") return { point: selection.point };
+    if (selection?.kind === "cluster") return selectedZone ? { rings: [selectedZone.geometry.coordinates[0]] } : null;
     if (selection?.kind === "cell") {
-      const feature = risk.data?.features.find((f) => f.properties.cell_id === selection.id);
-      return feature ? { kind: "cell", feature } : null;
-    }
-    if (selection?.kind === "hotspot") {
-      const feature = hotspotFeatures.find((f) => f.properties.id === selection.id);
-      return feature ? { kind: "hotspot", feature } : null;
+      const cell = gridData?.sel.find((c) => c[0] === selection.id);
+      if (cell && gridData) return { rings: [cellRing(cell, gridData.ukuran_sel)] };
+      return selectedCell ? { rings: [selectedCell.geometry.coordinates[0]] } : null;
     }
     return null;
-  }, [selection, clusters.data, risk.data, hotspotFeatures]);
-  const selectedShape = useMemo(() => (selected ? selectionShape(selected) : null), [selected]);
+  }, [selection, selectedZone, gridData, selectedCell]);
 
   const weatherBySlug = useMemo(
     () => Object.fromEntries((weather.data ?? []).map((w) => [w.slug, w.cuaca])),
@@ -367,20 +382,23 @@ export function MapDashboard({ status }: { status: DataStatus }) {
   const statusItems: MapStatusItem[] = [];
   if (riskOn) {
     const tierStats = tier === "provinsi" ? provinceStats : regencyStats;
-    if (near && risk.error) statusItems.push({ kind: "error", message: "Gagal memuat prediksi risiko.", onRetry: risk.retry });
-    else if (near && risk.loading && !risk.data) statusItems.push({ kind: "loading", message: "Memuat kotak risiko…" });
+    if (near && grid.error) statusItems.push({ kind: "error", message: "Gagal memuat prediksi risiko.", onRetry: grid.retry });
+    else if (near && grid.loading && !grid.data) statusItems.push({ kind: "loading", message: "Memuat kotak risiko…" });
     else if (!near && tierStats.error) {
       statusItems.push({ kind: "error", message: "Gagal memuat risiko wilayah.", onRetry: tierStats.retry });
     }
   }
+  if (provinces.error) {
+    statusItems.push({ kind: "error", message: "Gagal memuat batas provinsi.", onRetry: provinces.retry });
+  }
   if (tier !== "provinsi" && regencies.error) {
     statusItems.push({ kind: "error", message: "Gagal memuat batas kabupaten/kota.", onRetry: regencies.retry });
-  } else if (tier !== "provinsi" && regencies.loading && !regencies.data) {
+  } else if (tier !== "provinsi" && regencies.loading) {
     statusItems.push({ kind: "loading", message: "Memuat batas kabupaten/kota…" });
   }
   if (hotspotsOn) {
     if (hotspots.error) statusItems.push({ kind: "error", message: "Gagal memuat hotspot.", onRetry: hotspots.retry });
-    else if (hotspots.loading && !hotspots.data) statusItems.push({ kind: "loading", message: "Memuat hotspot…" });
+    else if (hotspots.loading) statusItems.push({ kind: "loading", message: "Memuat hotspot…" });
     else if (hotspotCount === 0) statusItems.push({ kind: "empty", message: `Tidak ada hotspot di ${contextName} pada rentang ini` });
   }
   if (filters.lapisan.includes("zona") && clusters.error) {
@@ -390,41 +408,47 @@ export function MapDashboard({ status }: { status: DataStatus }) {
     statusItems.push({ kind: "empty", message: "Perbesar peta untuk melihat lahan gambut" });
   }
 
+  const loadingDetail = (state: { error?: string; retry: () => void }) =>
+    state.error ? <DetailError onRetry={state.retry} /> : <DetailSkeleton />;
   const detail =
-    selected?.kind === "cluster"
-      ? {
-          eyebrow: `Zona kebakaran · ${selected.feature.properties.id}`,
-          title: regionName(selected.feature.properties.kabupaten),
-          body: <ClusterDetail feature={selected.feature} regionName={regionName(selected.feature.properties.kabupaten)} />,
-        }
-      : selected?.kind === "cell"
+    selection?.kind === "cluster"
+      ? selectedZone
         ? {
-            eyebrow: `Kotak grid ${selected.feature.properties.cell_id} · 5×5 km`,
-            title: regionName(selected.feature.properties.kabupaten),
-            body: (
+            eyebrow: `Zona kebakaran · ${selectedZone.properties.id}`,
+            title: regionName(selectedZone.properties.kabupaten),
+            body: <ClusterDetail feature={selectedZone} regionName={regionName(selectedZone.properties.kabupaten)} />,
+          }
+        : null
+      : selection?.kind === "cell"
+        ? {
+            eyebrow: `Kotak grid ${selection.id} · 5×5 km`,
+            title: selectedCell ? regionName(selectedCell.properties.kabupaten) : "Memuat…",
+            body: selectedCell ? (
               <CellDetail
-                feature={selected.feature}
-                regionName={regionName(selected.feature.properties.kabupaten)}
-                weather={weatherBySlug[selected.feature.properties.kabupaten]}
+                feature={selectedCell}
+                regionName={regionName(selectedCell.properties.kabupaten)}
+                weather={weatherBySlug[selectedCell.properties.kabupaten]}
               />
+            ) : (
+              loadingDetail(cellDetail)
             ),
           }
-        : selected?.kind === "hotspot"
+        : selection?.kind === "hotspot"
           ? {
               eyebrow: "Hotspot",
-              title: regionName(selected.feature.properties.kabupaten),
-              body: <HotspotDetail feature={selected.feature} regionName={regionName(selected.feature.properties.kabupaten)} />,
+              title: selectedHotspot ? regionName(selectedHotspot.properties.kabupaten) : "Memuat…",
+              body: selectedHotspot ? (
+                <HotspotDetail feature={selectedHotspot} regionName={regionName(selectedHotspot.properties.kabupaten)} />
+              ) : (
+                loadingDetail(hotspotDetail)
+              ),
             }
           : null;
 
   const visibleLayers = filters.lapisan.filter((key) => LAYERS.some((layer) => layer.key === key));
 
-  // Numbered hotspot groups on screen (the grouping happens inside the map).
-  const groupCount = useMapIdleValue(map, (m) => {
-    if (!m.getLayer(HOTSPOT_GROUP_LAYER)) return 0;
-    const ids = new Set(m.queryRenderedFeatures({ layers: [HOTSPOT_GROUP_LAYER] }).map((f) => f.properties.cluster_id));
-    return ids.size;
-  });
+  // Hotspots and numbered groups on screen, read from the rendered (clustered) source.
+  const hotspotCounts = useMapIdleValue(map, readHotspotCounts, sameHotspotCounts);
 
   // Legend counts: objects inside the current view.
   const legendCounts = useMemo((): LegendCounts | undefined => {
@@ -432,9 +456,14 @@ export function MapDashboard({ status }: { status: DataStatus }) {
     const view = viewport.bbox;
     const zeroLevels = (): Record<RiskLevel, number> => ({ rendah: 0, sedang: 0, tinggi: 0, sangat_tinggi: 0 });
     const risk = zeroLevels();
-    if (near) {
-      for (const f of riskData?.features ?? []) {
-        if (bboxIntersects(ringBBox(f.geometry.coordinates[0]), view)) risk[f.properties.level_risiko]++;
+    let peat = 0;
+    if (near && gridData) {
+      const size = gridData.ukuran_sel;
+      const gridDayIndex = gridDay(gridData, targetDate);
+      for (const cell of gridData.sel) {
+        if (!bboxIntersects([cell[1], cell[2], cell[1] + size, cell[2] + size], view)) continue;
+        if (gridDayIndex >= 0) risk[getRiskLevel(cellScore(cell, gridDayIndex))]++;
+        if (cell[3] === 1) peat++;
       }
     } else {
       const stats = tier === "provinsi" ? provinceStats.data : regencyStats.data;
@@ -443,22 +472,12 @@ export function MapDashboard({ status }: { status: DataStatus }) {
         if (item && bboxIntersects(item.bbox, view)) risk[getRiskLevel(s.rata_skor_risiko)]++;
       }
     }
-    const byConfidence = Object.fromEntries(CONFIDENCE_LEVELS.map((c) => [c, 0])) as Record<(typeof CONFIDENCE_LEVELS)[number], number>;
-    let total = 0;
-    for (const f of hotspotFeatures) {
-      if (!pointInBBox(f.geometry.coordinates, view)) continue;
-      byConfidence[f.properties.confidence]++;
-      total++;
-    }
     const zones = Object.fromEntries(CLUSTER_STATUSES.map((s) => [s, 0])) as Record<(typeof CLUSTER_STATUSES)[number], number>;
     for (const f of clusters.data?.features ?? []) {
       if (f.geometry.coordinates[0].some((p) => pointInBBox(p, view))) zones[f.properties.status]++;
     }
-    const peat = (riskData?.features ?? []).filter(
-      (f) => f.properties.is_gambut && pointInBBox(f.geometry.coordinates[0][0], view),
-    ).length;
-    return { risk, hotspots: { total, byConfidence, groups: groupCount ?? 0 }, zones, peat };
-  }, [viewport, near, tier, riskData, provinceStats.data, regencyStats.data, indexBySlug, hotspotFeatures, groupCount, clusters.data]);
+    return { risk, hotspots: hotspotCounts ?? undefined, zones, peat };
+  }, [viewport, near, tier, gridData, targetDate, provinceStats.data, regencyStats.data, indexBySlug, hotspotCounts, clusters.data]);
 
   const legendProps: LegendProps = {
     layers: visibleLayers,
@@ -523,14 +542,14 @@ export function MapDashboard({ status }: { status: DataStatus }) {
           label="Peta hotspot dan prediksi risiko karhutla Indonesia"
           tier={tier}
           layers={filters.lapisan}
-          provinces={provinces.data}
-          regencies={regencies.data}
-          provinceLines={provinceLines.data}
+          regencies={regenciesWanted}
+          regenciesLoaded={regenciesWanted && !regencies.loading && !regencies.error}
           provinceStats={provinceStatsBySlug}
           regencyStats={regencyStatsBySlug}
-          hotspots={hotspots.data}
+          hotspots={shownHotspotUrl}
           clusters={clusters.data}
-          risk={riskData}
+          grid={gridData}
+          targetDate={targetDate}
           riskOpacity={riskOpacity}
           regionNames={regionNames}
           selected={selectedShape}
@@ -542,7 +561,7 @@ export function MapDashboard({ status }: { status: DataStatus }) {
           onReady={setMap}
           onSelectCluster={(id) => setSelection({ kind: "cluster", id })}
           onSelectCell={(id) => setSelection({ kind: "cell", id })}
-          onSelectHotspot={(id) => setSelection({ kind: "hotspot", id })}
+          onSelectHotspot={(id, point) => setSelection({ kind: "hotspot", id, point })}
           onSelectRegion={focusRegion}
         />
       </div>

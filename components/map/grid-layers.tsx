@@ -1,20 +1,25 @@
 "use client";
 
-import type { ExpressionSpecification, FilterSpecification } from "maplibre-gl";
+import { useMemo } from "react";
 import { Layer, Source } from "react-map-gl/maplibre";
 import { formatDecimal } from "@/lib/format";
-import { getRiskColor, getRiskLabel } from "@/lib/risk";
-import type { RiskCellCollection, RiskCellProps, RiskLevel } from "@/types";
+import { getRiskColor, getRiskLabel, RISK_LEVEL_ORDER } from "@/lib/risk";
+import type { RiskGrid, RiskLevel } from "@/types";
 import { slotId } from "./basemap";
-import { HOVER, TRANSPARENT } from "./expressions";
+import { hasStateLevel, HOVER, riskFillColor } from "./expressions";
 import { escapeHtml, swatchHtml, tooltipHtml } from "./hover";
 import { useLayerInteraction } from "./interactions";
 import { useMapStyle } from "./map-view";
+import { GRID_RISK_LAYER, GRID_SOURCE } from "./map-queries";
+import { gridDay, gridFeatures, gridStates, type GridCellProps } from "./risk-grid";
+import { useFeatureStates } from "./use-feature-state";
 
 const PEAT_FILL = { normal: 0.26, emphasis: 0.55 };
 
 export interface GridLayersProps {
-  data: RiskCellCollection;
+  grid: RiskGrid;
+  /** Prediction day shown (YYYY-MM-DD). Changing it only updates feature-state. */
+  targetDate: string;
   /** Lowest zoom at which the grid is drawn. */
   minzoom?: number;
   /** Risk fill ("Prediksi risiko" layer) and its opacity. */
@@ -32,9 +37,13 @@ export interface GridLayersProps {
   onSelect?: (cellId: string) => void;
 }
 
-/** 5 km prediction grid colored by risk level, and the peat cells under it. */
+/**
+ * 5 km prediction grid colored by risk level, and the peat cells under it. The polygons are
+ * built once per loaded area; the risk of the chosen day lives in feature-state.
+ */
 export function GridLayers({
-  data,
+  grid,
+  targetDate,
   minzoom = 0,
   risk,
   opacity,
@@ -46,41 +55,39 @@ export function GridLayers({
   onSelect,
 }: GridLayersProps) {
   const { theme, colors } = useMapStyle();
+  const data = useMemo(() => gridFeatures(grid), [grid]);
+  const day = gridDay(grid, targetDate);
+  const states = useMemo(() => (day >= 0 ? gridStates(grid, day) : null), [grid, day]);
+  useFeatureStates(GRID_SOURCE, states);
 
-  useLayerInteraction("grid-risiko", onSelect ? {
-    hover: true,
-    tooltip: (feature) => {
-      const p = feature.properties as RiskCellProps;
-      const level = p.level_risiko;
-      return tooltipHtml(
-        `${swatchHtml(getRiskColor(level, theme), level === "rendah")}${escapeHtml(`Risiko ${getRiskLabel(level).toLowerCase()}`)}`,
-        [
-          ["Skor", formatDecimal(p.skor_risiko)],
-          ["Wilayah", regionNames?.[p.kabupaten] ?? p.kabupaten],
-          ["Lahan", p.is_gambut ? "Gambut" : "Mineral"],
-        ],
-        "Klik untuk detail",
-      );
-    },
-    onClick: (feature) => onSelect(String(feature.properties.cell_id)),
-  } : null);
+  useLayerInteraction(
+    GRID_RISK_LAYER,
+    onSelect
+      ? {
+          hover: true,
+          tooltip: (feature) => {
+            const p = feature.properties as GridCellProps;
+            const state = feature.state as { level?: number; skor?: number };
+            const level: RiskLevel | undefined = RISK_LEVEL_ORDER[state.level ?? -1];
+            if (!level || state.skor === undefined) return null;
+            return tooltipHtml(
+              `${swatchHtml(getRiskColor(level, theme), level === "rendah")}${escapeHtml(`Risiko ${getRiskLabel(level).toLowerCase()}`)}`,
+              [
+                ["Skor", formatDecimal(state.skor)],
+                ["Wilayah", regionNames?.[p.kabupaten] ?? p.kabupaten],
+                ["Lahan", p.is_gambut ? "Gambut" : "Mineral"],
+              ],
+              "Klik untuk detail",
+            );
+          },
+          onClick: (feature) => onSelect(String(feature.properties.cell_id)),
+        }
+      : null,
+  );
 
-  const color: ExpressionSpecification = [
-    "match",
-    ["get", "level_risiko"],
-    "sedang",
-    getRiskColor("sedang", theme),
-    "tinggi",
-    getRiskColor("tinggi", theme),
-    "sangat_tinggi",
-    getRiskColor("sangat_tinggi", theme),
-    TRANSPARENT,
-  ];
-  const levelFilter: FilterSpecification | undefined = onlyLevel ? ["==", ["get", "level_risiko"], onlyLevel] : undefined;
-  const highlighted: ExpressionSpecification = ["==", ["get", "level_risiko"], highlightLevel ?? ""];
-
+  const highlighted = hasStateLevel(highlightLevel);
   return (
-    <Source id="grid" type="geojson" data={data} promoteId="cell_id">
+    <Source id={GRID_SOURCE} type="geojson" data={data} promoteId="cell_id">
       <Layer
         id="grid-gambut"
         type="fill"
@@ -91,20 +98,18 @@ export function GridLayers({
         paint={{ "fill-color": colors.gambut, "fill-opacity": peatEmphasis ? PEAT_FILL.emphasis : PEAT_FILL.normal }}
       />
       <Layer
-        id="grid-risiko"
+        id={GRID_RISK_LAYER}
         type="fill"
         beforeId={slotId("risiko")}
         minzoom={minzoom}
-        {...(levelFilter ? { filter: levelFilter } : {})}
         layout={{ visibility: risk ? "visible" : "none" }}
-        paint={{ "fill-color": color, "fill-opacity": opacity, "fill-antialias": false }}
+        paint={{ "fill-color": riskFillColor(theme, onlyLevel), "fill-opacity": opacity, "fill-antialias": false }}
       />
       <Layer
         id="grid-garis"
         type="line"
         beforeId={slotId("risiko")}
         minzoom={minzoom}
-        {...(levelFilter ? { filter: levelFilter } : {})}
         layout={{ visibility: risk ? "visible" : "none" }}
         paint={{
           "line-color": colors.strong,

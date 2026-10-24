@@ -1,25 +1,17 @@
 "use client";
 
 import type { Map as MaplibreMap, PaddingOptions } from "maplibre-gl";
-import { useMemo } from "react";
 import { useResolvedTheme } from "@/components/ui/theme";
 import { INDONESIA_MAX_BBOX } from "@/lib/geo";
-import type {
-  ClusterCollection,
-  HotspotCollection,
-  ProvinceLineCollection,
-  RegionBoundaryCollection,
-  RegionStat,
-  RiskCellCollection,
-  RiskLevel,
-} from "@/types";
+import type { ClusterCollection, RegionStat, RiskGrid, RiskLevel } from "@/types";
+import { GEO_FILES } from "./geo-files";
 import { GridLayers } from "./grid-layers";
 import { HotspotLayers } from "./hotspot-layers";
 import { MapInteractions } from "./interactions";
 import type { LegendHighlight } from "./map-legend";
 import { MapView } from "./map-view";
 import { ProvinceLineLayer } from "./province-line-layer";
-import { labelPoints, RegionLabelLayer, RegionLayers } from "./region-layers";
+import { RegionLabelLayer, RegionLayers } from "./region-layers";
 import type { SelectionShape } from "./selection";
 import { SelectionLayer } from "./selection-layer";
 import { DEFAULT_RISK_OPACITY, GRID_MIN_ZOOM, REGENCY_MIN_ZOOM, type MapTier } from "./styles";
@@ -31,16 +23,18 @@ export interface DashboardMapProps {
   /** Tier at the last settled view: decides which regions react to the pointer. */
   tier: MapTier;
   layers: LayerKey[];
-  provinces?: RegionBoundaryCollection;
-  regencies?: RegionBoundaryCollection;
-  provinceLines?: ProvinceLineCollection;
+  /** Add the regency boundaries (first time the map reaches zoom 6, or a regency is focused). */
+  regencies: boolean;
+  /** The regency boundaries have loaded: provinces then hand over at zoom 6. */
+  regenciesLoaded: boolean;
   provinceStats?: Record<string, RegionStat>;
   regencyStats?: Record<string, RegionStat>;
-  /** Hotspots of the whole country for the chosen window (grouped by the map). */
-  hotspots?: HotspotCollection;
+  /** URL of the hotspots of the whole country for the chosen window (grouped by the map). */
+  hotspots: string | null;
   clusters?: ClusterCollection;
-  /** 5 km grid of the visible area (zoom ≥ 8). */
-  risk?: RiskCellCollection;
+  /** 5 km grid of the visible area (zoom ≥ 8) with every prediction day. */
+  grid?: RiskGrid;
+  targetDate: string;
   riskOpacity: number;
   regionNames: Record<string, string>;
   /** Outline of the selected cell, zone, or hotspot. */
@@ -56,7 +50,7 @@ export interface DashboardMapProps {
   onReady?: (map: MaplibreMap) => void;
   onSelectCluster: (id: string) => void;
   onSelectCell: (cellId: string) => void;
-  onSelectHotspot: (id: string) => void;
+  onSelectHotspot: (id: string, point: [number, number]) => void;
   onSelectRegion: (slug: string) => void;
 }
 
@@ -65,20 +59,21 @@ export interface DashboardMapProps {
  *
  * Every source stays mounted once its data exists; switching a layer off only hides it
  * (`visibility`), and the zoom tiers are layer zoom ranges, so zooming never waits for React:
- * provinces < 6, regencies 6 to < 8, the 5 km grid and single hotspots ≥ 8.
+ * provinces < 6, regencies 6 to < 8, the 5 km grid and single hotspots ≥ 8. Boundaries and
+ * hotspots are URLs that MapLibre's worker fetches and parses off the main thread.
  */
 export default function DashboardMap({
   label,
   tier,
   layers,
-  provinces,
   regencies,
-  provinceLines,
+  regenciesLoaded,
   provinceStats,
   regencyStats,
   hotspots,
   clusters,
-  risk,
+  grid,
+  targetDate,
   riskOpacity,
   regionNames,
   selected,
@@ -99,10 +94,8 @@ export default function DashboardMap({
   const highlightLevel = riskOn && highlight?.kind === "risiko" ? highlight.level : null;
   const boundaryEmphasis = (level: "provinsi" | "kabupaten") => highlight?.kind === "batas" && highlight.tier === level;
   // Provinces keep their fill until the regencies have loaded.
-  const provinceZoom: [number, number] = regencies ? [0, REGENCY_MIN_ZOOM] : [0, 24];
+  const provinceZoom: [number, number] = regenciesLoaded ? [0, REGENCY_MIN_ZOOM] : [0, 24];
   const regencyZoom: [number, number] = [REGENCY_MIN_ZOOM, GRID_MIN_ZOOM];
-  const provinceLabels = useMemo(() => provinces && labelPoints(provinces), [provinces]);
-  const regencyLabels = useMemo(() => regencies && labelPoints(regencies), [regencies]);
 
   // The choropleth follows the risk opacity slider (its default is the grid's default opacity).
   const regionLayer = (level: "provinsi" | "kabupaten") => ({
@@ -122,44 +115,39 @@ export default function DashboardMap({
   return (
     <MapView label={label} theme={theme} onReady={onReady} fitPadding={fitPadding} maxBounds={INDONESIA_MAX_BBOX}>
       <MapInteractions>
-        {provinces ? (
-          <>
-            <RegionLayers
-              level="provinsi"
-              data={provinces}
-              zoom={provinceZoom}
-              stats={provinceStats}
-              {...regionLayer("provinsi")}
-              boundary={boundsOn ? { weight: 1.3, zoom: provinceZoom, emphasis: boundaryEmphasis("provinsi") } : null}
-            />
-            {provinceLabels ? <RegionLabelLayer level="provinsi" data={provinceLabels} /> : null}
-          </>
-        ) : null}
+        <RegionLayers
+          level="provinsi"
+          data={GEO_FILES.provinsi}
+          zoom={provinceZoom}
+          stats={provinceStats}
+          {...regionLayer("provinsi")}
+          boundary={boundsOn ? { weight: 1.3, zoom: provinceZoom, emphasis: boundaryEmphasis("provinsi") } : null}
+        />
+        <RegionLabelLayer level="provinsi" data={GEO_FILES.labelProvinsi} />
         {regencies ? (
           <>
             <RegionLayers
               level="kabupaten"
-              data={regencies}
+              data={GEO_FILES.kabupaten}
               zoom={regencyZoom}
               stats={regencyStats}
               {...regionLayer("kabupaten")}
               boundary={boundsOn ? { weight: 0.7, zoom: [REGENCY_MIN_ZOOM, 24], emphasis: boundaryEmphasis("kabupaten") } : null}
               nameOnHover={tier === "dekat" && boundsOn && !riskOn}
             />
-            {regencyLabels ? <RegionLabelLayer level="kabupaten" data={regencyLabels} /> : null}
+            <RegionLabelLayer level="kabupaten" data={GEO_FILES.labelKabupaten} />
+            <ProvinceLineLayer
+              data={GEO_FILES.provinsiGaris}
+              visible={boundsOn}
+              minzoom={REGENCY_MIN_ZOOM}
+              emphasis={boundaryEmphasis("provinsi")}
+            />
           </>
         ) : null}
-        {provinceLines ? (
-          <ProvinceLineLayer
-            data={provinceLines}
-            visible={boundsOn}
-            minzoom={REGENCY_MIN_ZOOM}
-            emphasis={boundaryEmphasis("provinsi")}
-          />
-        ) : null}
-        {risk ? (
+        {grid ? (
           <GridLayers
-            data={risk}
+            grid={grid}
+            targetDate={targetDate}
             minzoom={GRID_MIN_ZOOM}
             risk={riskOn}
             opacity={riskOpacity}
@@ -185,7 +173,6 @@ export default function DashboardMap({
           <HotspotLayers
             data={hotspots}
             visible={layers.includes("hotspot")}
-            regionNames={regionNames}
             highlight={highlight?.kind === "kepercayaan" ? highlight.level : null}
             groupEmphasis={highlight?.kind === "kelompok"}
             onSelect={onSelectHotspot}

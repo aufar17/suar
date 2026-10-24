@@ -2,15 +2,17 @@
 
 import type { ExpressionSpecification, FilterSpecification, GeoJSONSource } from "maplibre-gl";
 import { Layer, Source, useMap } from "react-map-gl/maplibre";
-import { formatDateTime, formatDecimal, formatInteger } from "@/lib/format";
+import { formatDecimal, formatInteger } from "@/lib/format";
 import { CONFIDENCE_LABELS } from "@/lib/labels";
 import { prefersReducedMotion } from "@/lib/use-media-query";
-import { CONFIDENCE_LEVELS, type Confidence, type HotspotCollection, type HotspotProps } from "@/types";
+import type { Confidence, HotspotMapCollection, HotspotMapProps } from "@/types";
+import { CONFIDENCE_LEVELS } from "@/types/constants";
 import { slotId } from "./basemap";
 import { HOVER, withAlpha } from "./expressions";
 import { escapeHtml, tooltipHtml } from "./hover";
 import { useLayerInteraction } from "./interactions";
 import { useMapStyle } from "./map-view";
+import { HOTSPOT_GROUP_LAYER, HOTSPOT_POINT_LAYER, HOTSPOT_SOURCE } from "./map-queries";
 import { HOTSPOT_OPACITY } from "./styles";
 
 /** Hotspots are grouped up to this zoom; from the next zoom on every hotspot is drawn. */
@@ -35,18 +37,17 @@ const GROUP_LABEL: ExpressionSpecification = [
 const IS_GROUP: FilterSpecification = ["has", "point_count"];
 const IS_POINT: FilterSpecification = ["!", ["has", "point_count"]];
 
-export const HOTSPOT_POINT_LAYER = "hotspot-titik";
-export const HOTSPOT_GROUP_LAYER = "hotspot-kelompok";
 
 export interface HotspotLayersProps {
-  data: HotspotCollection | string;
+  /** Hotspots (`/api/hotspots`), preferably as a URL so MapLibre's worker fetches and parses them. */
+  data: HotspotMapCollection | string;
   visible?: boolean;
-  regionNames: Record<string, string>;
   /** Legend hover: emphasize hotspots of this confidence level. */
   highlight?: Confidence | null;
   /** Legend hover: outline every group. */
   groupEmphasis?: boolean;
-  onSelect?: (id: string) => void;
+  /** Click on a hotspot: its id and position (details are loaded separately). */
+  onSelect?: (id: string, point: [number, number]) => void;
 }
 
 /**
@@ -57,7 +58,6 @@ export interface HotspotLayersProps {
 export function HotspotLayers({
   data,
   visible = true,
-  regionNames,
   highlight = null,
   groupEmphasis = false,
   onSelect,
@@ -68,15 +68,23 @@ export function HotspotLayers({
   useLayerInteraction(HOTSPOT_POINT_LAYER, {
     hover: true,
     tooltip: (feature) => {
-      const p = feature.properties as Partial<HotspotProps>;
-      const rows: [string, string][] = [];
-      if (p.waktu_deteksi) rows.push(["Waktu", formatDateTime(p.waktu_deteksi)]);
-      if (p.frp !== undefined) rows.push(["FRP", `${formatDecimal(p.frp, 1)} MW`]);
-      if (p.confidence) rows.push(["Kepercayaan", CONFIDENCE_LABELS[p.confidence]]);
-      if (p.kabupaten) rows.push(["Wilayah", regionNames[p.kabupaten] ?? p.kabupaten]);
-      return tooltipHtml("Hotspot", rows, onSelect ? "Klik untuk detail" : undefined);
+      const p = feature.properties as HotspotMapProps;
+      return tooltipHtml(
+        "Hotspot",
+        [
+          ["FRP", `${formatDecimal(p.frp, 1)} MW`],
+          ["Kepercayaan", CONFIDENCE_LABELS[p.confidence]],
+        ],
+        onSelect ? "Klik untuk detail" : undefined,
+      );
     },
-    onClick: onSelect ? (feature) => onSelect(String(feature.properties.id)) : undefined,
+    onClick: onSelect
+      ? (feature) => {
+          if (feature.geometry.type !== "Point") return;
+          const [lon, lat] = feature.geometry.coordinates;
+          onSelect(String(feature.properties.id), [lon, lat]);
+        }
+      : undefined,
   });
 
   useLayerInteraction(HOTSPOT_GROUP_LAYER, {
@@ -89,7 +97,7 @@ export function HotspotLayers({
       ),
     onClick: (feature) => {
       const map = mapRef?.getMap();
-      const source = map?.getSource<GeoJSONSource>("hotspot");
+      const source = map?.getSource<GeoJSONSource>(HOTSPOT_SOURCE);
       if (!map || !source || feature.geometry.type !== "Point") return;
       const center = feature.geometry.coordinates as [number, number];
       source
@@ -111,7 +119,7 @@ export function HotspotLayers({
 
   return (
     <Source
-      id="hotspot"
+      id={HOTSPOT_SOURCE}
       type="geojson"
       data={data}
       promoteId="id"

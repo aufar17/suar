@@ -2,6 +2,11 @@ import type { BBox, Position } from "@/types/geojson";
 
 /** Extent of Indonesia's land area. */
 export const INDONESIA_BBOX: BBox = [95.0, -11.0, 141.0, 5.9];
+/**
+ * Largest bbox of one risk grid request (square degrees): about 20,000 cells of 5 km, a
+ * 1440 × 900 px view at zoom 8. Smaller scales use the per-region averages.
+ */
+export const MAX_GRID_BBOX_DEG2 = 40;
 /** The map may be panned a little beyond Indonesia, but not further. */
 export const INDONESIA_MAX_BBOX: BBox = [88.0, -16.0, 148.0, 11.0];
 

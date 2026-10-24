@@ -6,14 +6,15 @@ import {
   clusterCollectionSchema,
   dataStatusSchema,
   hotspotCollectionSchema,
+  hotspotFeatureSchema,
   monthlyTrendSchema,
-  provinceLineCollectionSchema,
   regionBoundaryCollectionSchema,
   regionDetailSchema,
   regionSchema,
   regionStatSchema,
   regionWeatherSchema,
-  riskCellCollectionSchema,
+  riskCellFeatureSchema,
+  riskGridSchema,
   weatherSnapshotSchema,
   type BBox,
 } from "@/types";
@@ -70,11 +71,15 @@ export const supabaseDataSource: DataSource = {
       hotspotCollectionSchema,
     ),
 
+  getHotspot: (id) => rpc("get_hotspot", { hotspot_id: id }, hotspotFeatureSchema.nullable()),
+
   getClusters: ({ date, ...area }) =>
     rpc("get_clusters", { target_date: date, ...areaArgs(area) }, clusterCollectionSchema),
 
-  getRiskCells: ({ targetDate, ...area }) =>
-    rpc("get_risk_cells", { target_date: targetDate, ...areaArgs(area) }, riskCellCollectionSchema),
+  getRiskGrid: (area) => rpc("get_risk_grid", areaArgs(area), riskGridSchema),
+
+  getRiskCell: (cellId, targetDate) =>
+    rpc("get_risk_cell", { cell_id: cellId, target_date: targetDate }, riskCellFeatureSchema.nullable()),
 
   async getRegions() {
     const { data, error } = await supabase().from("regions").select("id, slug, nama, level, provinsi").order("nama");
@@ -88,8 +93,6 @@ export const supabaseDataSource: DataSource = {
       { boundary_level: level, provinsi_slug: provinsi ?? null },
       regionBoundaryCollectionSchema,
     ),
-
-  getProvinceLines: () => rpc("get_province_lines", {}, provinceLineCollectionSchema),
 
   getRegionDetail: (slug) => rpc("get_region_detail", { region_slug: slug }, regionDetailSchema.nullable()),
 

@@ -85,9 +85,12 @@ export function parseSearchParams<S extends z.ZodType>(request: Request, schema:
   };
 }
 
-/** Response with JSON body and CDN caching suited for data that changes about once a day. */
+/**
+ * JSON response cached for data that changes about once a day: 10 minutes in the browser,
+ * an hour on the CDN, then served stale for up to a day while it revalidates.
+ */
 export function jsonResponse(body: unknown) {
   return Response.json(body, {
-    headers: { "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400" },
+    headers: { "Cache-Control": "public, max-age=600, s-maxage=3600, stale-while-revalidate=86400" },
   });
 }

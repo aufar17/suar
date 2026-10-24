@@ -85,9 +85,20 @@ $$;
 Satu hari puncak musim kebakaran bisa berisi beberapa ribu hotspot nasional, jadi buat indeks pada
 `(waktu_deteksi)`, `geom` (GiST), `provinsi`, dan `kabupaten`.
 
+`GET /api/hotspots` hanya meneruskan `id`, `confidence`, `frp`, dan koordinat (4 desimal) ke browser; field lain
+diambil lewat `get_hotspot` saat titik diklik.
+
 **Kelompok hotspot** (angka cluster di zoom jauh) dihitung di browser oleh MapLibre (source GeoJSON dengan
 `cluster: true`) dari hasil `get_hotspots` **tanpa** bbox untuk rentang dan tingkat kepercayaan terpilih, jadi tidak
 butuh fungsi database tersendiri. Endpoint `/api/hotspots/groups` sudah dihapus.
+
+### `get_hotspot`
+
+```sql
+get_hotspot(hotspot_id text) returns jsonb  -- Feature<Point, HotspotProps> atau null
+```
+
+Satu hotspot lengkap (properti sama dengan `get_hotspots`) untuk panel detail, atau `null` jika id tidak ada.
 
 ### `get_clusters`
 
@@ -105,27 +116,54 @@ get_clusters(
 `aktif_sejak`, `provinsi`, `kabupaten` (wilayah dengan hotspot terbanyak di zona itu). Hanya zona hasil DBSCAN untuk
 `target_date`. Dengan bbox, zona yang **bersinggungan** dengan bbox ikut dikembalikan.
 
-### `get_risk_cells`
+### `get_risk_grid`
 
 ```sql
-get_risk_cells(
-  target_date date,
+get_risk_grid(
   min_lon double precision, min_lat double precision,
   max_lon double precision, max_lat double precision,
   provinsi_slug text,
   kabupaten_slug text
-) returns jsonb  -- FeatureCollection<Polygon, RiskCellProps>
+) returns jsonb  -- RiskGrid (tabel ringkas, bukan GeoJSON)
 ```
 
-Satu feature per kotak grid 5×5 km dari prediksi **terbaru** yang menargetkan `target_date`. `properties`: `cell_id`,
-`tanggal_prediksi`, `tanggal_target`, `skor_risiko` (0–1), `level_risiko` (`rendah` < 0,25 ≤ `sedang` < 0,5 ≤
-`tinggi` < 0,75 ≤ `sangat_tinggi`), `is_gambut`, `faktor` (array 3 objek `{ fitur, label, kontribusi }`, diurutkan
-dari nilai SHAP absolut terbesar), `provinsi`, `kabupaten`. Dengan bbox, kotak yang **bersinggungan** dengan bbox ikut
-dikembalikan.
+Grid 5 km suatu area dengan skor **semua hari prediksi** dari prediksi terbaru, dalam bentuk tabel ringkas. Peta
+membangun poligon kotak di browser (kotak cukup ditentukan sudut barat daya dan ukurannya) dan berganti hari tanpa
+permintaan baru — hanya nilai feature-state yang berubah.
 
-Grid nasional berisi ±76.000 kotak, jadi frontend **selalu** mengirim salah satu filter: bbox (maksimal 25 derajat
-persegi, dipakai peta saat zoom ≥ 9), `provinsi_slug`, atau `kabupaten_slug` (peta halaman kabupaten). Pada zoom
+```json
+{
+  "tanggal_prediksi": "2026-10-20",
+  "tanggal_target": ["2026-10-21", "2026-10-22", "2026-10-23", "2026-10-24", "2026-10-25", "2026-10-26", "2026-10-27"],
+  "ukuran_sel": 0.045,
+  "kabupaten": ["siak", "pelalawan"],
+  "sel": [
+    ["R123-C0456", 101.52, 0.435, 1, 0, 523, 540, 561, 580, 602, 610, 630]
+  ]
+}
+```
+
+- `ukuran_sel` = panjang sisi kotak dalam derajat.
+- `kabupaten` = slug kabupaten/kota yang dirujuk kotak (indeks berbasis 0).
+- Setiap elemen `sel`: `[cell_id, min_lon, min_lat, is_gambut (0|1), indeks kabupaten, skor×1000 untuk setiap
+  tanggal di tanggal_target]` — skor dibulatkan ke bilangan bulat 0–1000, koordinat 4–5 desimal.
+- Dengan bbox, kotak yang **bersinggungan** dengan bbox ikut dikembalikan.
+
+Grid nasional berisi ±76.000 kotak, jadi frontend **selalu** mengirim salah satu filter: bbox (maksimal 40 derajat
+persegi, dipakai peta saat zoom ≥ 8), `provinsi_slug`, atau `kabupaten_slug` (peta halaman kabupaten). Pada zoom
 lebih jauh peta memakai rata-rata per wilayah dari `get_region_stats`.
+
+### `get_risk_cell`
+
+```sql
+get_risk_cell(cell_id text, target_date date) returns jsonb  -- Feature<Polygon, RiskCellProps> atau null
+```
+
+Satu kotak lengkap untuk panel detail (dipanggil saat kotak diklik). `properties`: `cell_id`, `tanggal_prediksi`,
+`tanggal_target`, `skor_risiko` (0–1), `level_risiko` (`rendah` < 0,25 ≤ `sedang` < 0,5 ≤ `tinggi` < 0,75 ≤
+`sangat_tinggi`), `is_gambut`, `faktor` (array 3 objek `{ fitur, label, kontribusi }`, diurutkan dari nilai SHAP
+absolut terbesar), `provinsi`, `kabupaten`. Kembalikan `null` jika kotak tidak ada atau belum punya prediksi untuk
+`target_date`.
 
 ### `get_region_boundaries`
 
@@ -141,19 +179,10 @@ get_region_boundaries(boundary_level text, provinsi_slug text) returns jsonb
 `level` (`provinsi` | `kabupaten` | `kota`), `provinsi` (slug provinsi induk; `null` untuk provinsi), `label`
 (`[lon, lat]` titik di dalam poligon untuk label, `ST_PointOnSurface`), `bbox` (`[minLon, minLat, maxLon, maxLat]`).
 
-Geometri harus ringan untuk browser dan bebas celah/tumpang tindih: provinsi < 400 KB, semua kabupaten/kota < 2,5 MB
-(lihat hasil `pnpm geo:build` sebagai acuan, atau `ST_SimplifyPreserveTopology` pada topologi bersama). Disarankan
-menyimpan geometri hasil penyederhanaan di kolom terpisah daripada menyederhanakan di setiap permintaan.
-
-### `get_province_lines`
-
-```sql
-get_province_lines() returns jsonb  -- FeatureCollection<MultiLineString, {}>
-```
-
-Garis batas antarprovinsi yang diambil dari topologi kabupaten/kota (garis yang memisahkan dua kabupaten dari provinsi
-berbeda), supaya saat zoom dekat garis provinsi berimpit tepat dengan garis kabupaten. Satu feature `MultiLineString`
-cukup; `properties` boleh `{}`.
+Saat ini frontend hanya memakai `properties` fungsi ini (daftar wilayah dan bbox untuk pencarian, `/api/regions/list`).
+**Peta di browser menggambar batas wilayah dari file statis** `public/geo/*.json` hasil `pnpm geo:build` (geoBoundaries,
+disederhanakan: provinsi < 250 KB, kabupaten/kota < 1,5 MB), bukan dari Supabase, supaya file itu di-cache browser dan
+dimuat langsung oleh worker MapLibre. Karena itu slug wilayah di database **wajib** sama dengan slug di file tersebut.
 
 ### `get_region_detail`
 
@@ -232,8 +261,8 @@ Dibaca langsung dengan `supabase.from(...)`.
 ```sql
 grant usage on schema public to anon;
 grant select on regions, weather_latest, data_status to anon;
-grant execute on function get_hotspots, get_clusters, get_risk_cells, get_region_boundaries,
-  get_province_lines, get_region_detail, get_monthly_trend, get_region_stats to anon;
+grant execute on function get_hotspots, get_hotspot, get_clusters, get_risk_grid, get_risk_cell,
+  get_region_boundaries, get_region_detail, get_monthly_trend, get_region_stats to anon;
 ```
 
 Fungsi sebaiknya `stable` dan `security invoker`, supaya RLS pada tabel sumber tetap berlaku.

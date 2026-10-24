@@ -111,11 +111,11 @@ docs/                kontrak RPC Supabase
 
 | Route | Parameter |
 | --- | --- |
-| `GET /api/hotspots` | `start`, `end` (`YYYY-MM-DD`, maks. 31 hari), `min_confidence`, `bbox`, `provinsi`, `kabupaten` |
+| `GET /api/hotspots` | `start`, `end` (`YYYY-MM-DD`, maks. 31 hari), `min_confidence`, `bbox`, `provinsi`, `kabupaten` – GeoJSON ringan untuk peta (`id`, `confidence`, `frp`, koordinat 4 desimal) |
+| `GET /api/hotspots/[id]` | – satu hotspot lengkap (panel detail) |
 | `GET /api/clusters` | `date`, `bbox`, `provinsi`, `kabupaten` |
-| `GET /api/risk` | `target_date`, dan salah satu dari `bbox` (maks. 25 derajat persegi), `provinsi`, `kabupaten` |
-| `GET /api/regions` | `level` (`provinsi` default, atau `kabupaten`), `provinsi` – GeoJSON batas wilayah |
-| `GET /api/regions/lines` | – garis batas antarprovinsi (berimpit dengan batas kabupaten) |
+| `GET /api/risk/grid` | salah satu dari `bbox` (maks. 40 derajat persegi), `provinsi`, `kabupaten` – grid 5 km ringkas berisi skor semua hari prediksi |
+| `GET /api/risk/cell` | `cell_id`, `target_date` – satu kotak lengkap dengan faktor (panel detail) |
 | `GET /api/regions/list` | – daftar semua wilayah + bbox (pencarian) |
 | `GET /api/stats/trend` | `start`, `end` (`YYYY-MM`), `slug` (provinsi atau kabupaten/kota; kosong = Indonesia) |
 | `GET /api/stats/regions` | `level` (`kabupaten` default, atau `provinsi`), `provinsi`, `date`, `start`, `end`, `min_confidence` – ringkasan per wilayah: jumlah hotspot, rata-rata dan maksimum skor risiko |

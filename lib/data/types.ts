@@ -7,14 +7,15 @@ import type {
   Confidence,
   DataStatus,
   HotspotCollection,
+  HotspotFeature,
   MonthlyTrend,
-  ProvinceLineCollection,
   Region,
   RegionBoundaryCollection,
   RegionDetail,
   RegionStat,
   RegionWeather,
-  RiskCellCollection,
+  RiskCellFeature,
+  RiskGrid,
   WeatherSnapshot,
 } from "@/types";
 
@@ -37,10 +38,6 @@ export interface HotspotQuery extends AreaFilter {
 
 export interface ClusterQuery extends AreaFilter {
   date: string;
-}
-
-export interface RiskQuery extends AreaFilter {
-  targetDate: string;
 }
 
 export interface TrendQuery {
@@ -74,12 +71,17 @@ export interface RegionStatsQuery {
 
 export interface DataSource {
   getHotspots(query: HotspotQuery): Promise<HotspotCollection>;
+  /** One hotspot with all its properties, or null when the id is unknown. */
+  getHotspot(id: string): Promise<HotspotFeature | null>;
   getClusters(query: ClusterQuery): Promise<ClusterCollection>;
-  getRiskCells(query: RiskQuery): Promise<RiskCellCollection>;
+  /** Compact 5 km grid of an area with the scores of every prediction day (see `RiskGrid`). */
+  getRiskGrid(query: AreaFilter): Promise<RiskGrid>;
+  /** One grid cell and its prediction (with factors) for a target date, or null. */
+  getRiskCell(cellId: string, targetDate: string): Promise<RiskCellFeature | null>;
   /** Every province, regency, and city, sorted by name. */
   getRegions(): Promise<Region[]>;
+  /** Boundaries with properties (the browser map draws the static files in `public/geo/`). */
   getRegionBoundaries(query: BoundaryQuery): Promise<RegionBoundaryCollection>;
-  getProvinceLines(): Promise<ProvinceLineCollection>;
   getRegionDetail(slug: string): Promise<RegionDetail | null>;
   /** Latest weather of a regency/city, or the mean of its regencies for a province. */
   getWeather(slug: string): Promise<WeatherSnapshot | null>;

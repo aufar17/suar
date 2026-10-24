@@ -7,6 +7,15 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/**": ["./mock/**/*"],
   },
+  // Boundaries for the map (pnpm geo:build) change only with a new boundary release.
+  async headers() {
+    return [
+      {
+        source: "/geo/:path*",
+        headers: [{ key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" }],
+      },
+    ];
+  },
   turbopack: {
     rules: {
       "*.css": {

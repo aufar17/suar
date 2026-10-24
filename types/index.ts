@@ -3,13 +3,22 @@ import {
   bboxSchema,
   featureCollectionSchema,
   featureSchema,
-  multiLineStringSchema,
   multiPolygonSchema,
   pointSchema,
   polygonSchema,
   positionSchema,
 } from "./geojson";
 
+import {
+  BOUNDARY_TIERS,
+  CLUSTER_STATUSES,
+  CONFIDENCE_LEVELS,
+  REGION_LEVELS,
+  RISK_LEVELS,
+  SATELLITES,
+} from "./constants";
+
+export * from "./constants";
 export * from "./geojson";
 
 // Shared primitives
@@ -28,13 +37,8 @@ const regionRefs = {
 
 // Hotspot
 
-export const CONFIDENCE_LEVELS = ["low", "nominal", "high"] as const;
 export const confidenceSchema = z.enum(CONFIDENCE_LEVELS);
-export type Confidence = z.infer<typeof confidenceSchema>;
-
-export const SATELLITES = ["VIIRS_SNPP", "VIIRS_NOAA20", "MODIS"] as const;
 export const satelliteSchema = z.enum(SATELLITES);
-export type Satellite = z.infer<typeof satelliteSchema>;
 
 export const hotspotPropsSchema = z.object({
   id: z.string(),
@@ -51,11 +55,15 @@ export type HotspotFeature = z.infer<typeof hotspotFeatureSchema>;
 export const hotspotCollectionSchema = featureCollectionSchema(hotspotFeatureSchema);
 export type HotspotCollection = z.infer<typeof hotspotCollectionSchema>;
 
+/** Hotspot as sent to the map: only what the map draws. Details come from `/api/hotspots/[id]`. */
+export const hotspotMapPropsSchema = hotspotPropsSchema.pick({ id: true, confidence: true, frp: true });
+export type HotspotMapProps = z.infer<typeof hotspotMapPropsSchema>;
+export const hotspotMapCollectionSchema = featureCollectionSchema(featureSchema(pointSchema, hotspotMapPropsSchema));
+export type HotspotMapCollection = z.infer<typeof hotspotMapCollectionSchema>;
+
 // Cluster (fire zone)
 
-export const CLUSTER_STATUSES = ["baru", "meluas", "stabil", "menyusut"] as const;
 export const clusterStatusSchema = z.enum(CLUSTER_STATUSES);
-export type ClusterStatus = z.infer<typeof clusterStatusSchema>;
 
 export const clusterPropsSchema = z.object({
   id: z.string(),
@@ -75,9 +83,7 @@ export type ClusterCollection = z.infer<typeof clusterCollectionSchema>;
 
 // Risk prediction
 
-export const RISK_LEVELS = ["rendah", "sedang", "tinggi", "sangat_tinggi"] as const;
 export const riskLevelSchema = z.enum(RISK_LEVELS);
-export type RiskLevel = z.infer<typeof riskLevelSchema>;
 
 export const riskFactorSchema = z.object({
   fitur: z.string(), // e.g. "hari_tanpa_hujan"
@@ -103,16 +109,37 @@ export type RiskCellFeature = z.infer<typeof riskCellFeatureSchema>;
 export const riskCellCollectionSchema = featureCollectionSchema(riskCellFeatureSchema);
 export type RiskCellCollection = z.infer<typeof riskCellCollectionSchema>;
 
+/**
+ * One cell of the compact grid: [cell_id, min_lon, min_lat, is_gambut (0|1), index into
+ * `kabupaten`, then skor_risiko × 1000 for each date in `tanggal_target`].
+ */
+export const riskGridCellSchema = z.tuple(
+  [z.string(), z.number(), z.number(), z.union([z.literal(0), z.literal(1)]), z.number().int().nonnegative()],
+  z.number().int().min(0).max(1000),
+);
+export type RiskGridCell = z.infer<typeof riskGridCellSchema>;
+
+/**
+ * 5 km grid of an area with the scores of every prediction day, as a compact table: square
+ * cells need only a corner and a size, so the map builds the polygons itself. Switching the
+ * prediction day then only changes values (feature-state), not geometry.
+ */
+export const riskGridSchema = z.object({
+  tanggal_prediksi: isoDateSchema,
+  tanggal_target: z.array(isoDateSchema),
+  /** Cell edge in degrees. */
+  ukuran_sel: z.number().positive(),
+  /** Regency slugs referenced by the cells. */
+  kabupaten: z.array(z.string()),
+  sel: z.array(riskGridCellSchema),
+});
+export type RiskGrid = z.infer<typeof riskGridSchema>;
+
 // Regions
 
-export const REGION_LEVELS = ["provinsi", "kabupaten", "kota"] as const;
 export const regionLevelSchema = z.enum(REGION_LEVELS);
-export type RegionLevel = z.infer<typeof regionLevelSchema>;
 
-/** Map and statistics tier: provinces, or regencies and cities together. */
-export const BOUNDARY_TIERS = ["provinsi", "kabupaten"] as const;
 export const boundaryTierSchema = z.enum(BOUNDARY_TIERS);
-export type BoundaryTier = z.infer<typeof boundaryTierSchema>;
 
 export const regionSchema = z.object({
   id: z.string(),
@@ -142,12 +169,6 @@ export const regionBoundaryFeatureSchema = featureSchema(
 export type RegionBoundaryFeature = z.infer<typeof regionBoundaryFeatureSchema>;
 export const regionBoundaryCollectionSchema = featureCollectionSchema(regionBoundaryFeatureSchema);
 export type RegionBoundaryCollection = z.infer<typeof regionBoundaryCollectionSchema>;
-
-/** Province borders traced from the regency topology, so they match regency outlines exactly. */
-export const provinceLineCollectionSchema = featureCollectionSchema(
-  featureSchema(multiLineStringSchema, z.object({})),
-);
-export type ProvinceLineCollection = z.infer<typeof provinceLineCollectionSchema>;
 
 export const regionDetailSchema = regionSchema.extend({
   /** Parent province name; `null` for provinces. */
@@ -216,9 +237,3 @@ export const dataStatusSchema = z.object({
   sumber: z.enum(["mock", "supabase"]),
 });
 export type DataStatus = z.infer<typeof dataStatusSchema>;
-
-export const CONFIDENCE_RANK: Record<Confidence, number> = {
-  low: 0,
-  nominal: 1,
-  high: 2,
-};

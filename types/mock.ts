@@ -4,7 +4,6 @@
 import type {
   ClusterCollection,
   DataStatus,
-  ProvinceLineCollection,
   RegionBoundaryCollection,
   WeatherSnapshot,
 } from "./index";
@@ -48,6 +47,5 @@ export interface MockWeather {
 }
 
 export type MockRegions = RegionBoundaryCollection;
-export type MockProvinceLines = ProvinceLineCollection;
 export type MockClusters = ClusterCollection;
 export type MockStatus = DataStatus;
