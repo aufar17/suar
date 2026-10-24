@@ -1,39 +1,29 @@
 "use client";
 
-import type L from "leaflet";
-import { useMemo } from "react";
+import type { Map as MaplibreMap, PaddingOptions } from "maplibre-gl";
 import { useResolvedTheme } from "@/components/ui/theme";
 import { INDONESIA_MAX_BBOX } from "@/lib/geo";
 import type {
   ClusterCollection,
-  ClusterFeature,
-  HotspotCollection,
-  HotspotFeature,
-  HotspotGroupFeature,
+  GroupedHotspotCollection,
   ProvinceLineCollection,
   RegionBoundaryCollection,
-  RegionBoundaryFeature,
   RegionStat,
   RiskCellCollection,
-  RiskCellFeature,
   RiskLevel,
 } from "@/types";
-import { BoundaryLayer } from "./boundary-layer";
-import { ChoroplethLayer } from "./choropleth-layer";
-import { ClusterLayer } from "./cluster-layer";
-import { HotspotGroupLayer } from "./hotspot-group-layer";
-import { HotspotLayer } from "./hotspot-layer";
-import { MapView } from "./map-view";
-import { PeatLayer } from "./peat-layer";
-import { ProvinceLineLayer } from "./province-line-layer";
-import { RiskLayer } from "./risk-layer";
-import { selectionShape, type SelectedFeature, type SelectionShape } from "./selection";
-import { SelectionLayer } from "./selection-layer";
+import { GridLayers } from "./grid-layers";
+import { HotspotLayers } from "./hotspot-layers";
+import { MapInteractions } from "./interactions";
 import type { LegendHighlight } from "./map-legend";
+import { MapView } from "./map-view";
+import { ProvinceLineLayer } from "./province-line-layer";
+import { RegionLabelLayer, RegionLayers } from "./region-layers";
+import type { SelectionShape } from "./selection";
+import { SelectionLayer } from "./selection-layer";
+import { DEFAULT_RISK_OPACITY, type MapTier } from "./styles";
 import type { LayerKey } from "./use-map-filters";
-
-/** What the map draws at the current zoom: provinces (≤ 6), regencies (7–8), or the 5 km grid (≥ 9). */
-export type MapTier = "provinsi" | "kabupaten" | "dekat";
+import { ZoneLayers } from "./zone-layers";
 
 export interface DashboardMapProps {
   label: string;
@@ -44,27 +34,27 @@ export interface DashboardMapProps {
   provinceLines?: ProvinceLineCollection;
   provinceStats?: Record<string, RegionStat>;
   regencyStats?: Record<string, RegionStat>;
-  /** Individual hotspots to draw (all of them up close, the isolated ones further out). */
-  hotspots?: HotspotCollection;
-  groups: HotspotGroupFeature[];
+  /** Hotspots to draw (all of them up close, groups and isolated ones further out). */
+  hotspots?: GroupedHotspotCollection;
   clusters?: ClusterCollection;
   risk?: RiskCellCollection;
   riskOpacity: number;
   regionNames: Record<string, string>;
-  selected: SelectedFeature | null;
-  /** Outline of the focused province or regency. */
-  focus: SelectionShape | null;
+  /** Outline of the selected cell, zone, or hotspot. */
+  selected: SelectionShape | null;
+  /** Focused province or regency. */
   focusSlug: string | null;
+  focusLevel: "provinsi" | "kabupaten" | null;
   /** Legend: fill only regions/cells of this level. */
   onlyLevel?: RiskLevel | null;
   /** Legend item under the pointer: the matching objects are emphasized. */
   highlight?: LegendHighlight | null;
-  fitPadding?: L.FitBoundsOptions;
-  onReady?: (map: L.Map) => void;
-  onSelectCluster: (feature: ClusterFeature) => void;
-  onSelectCell: (feature: RiskCellFeature) => void;
-  onSelectHotspot: (feature: HotspotFeature) => void;
-  onSelectRegion: (feature: RegionBoundaryFeature) => void;
+  fitPadding?: PaddingOptions;
+  onReady?: (map: MaplibreMap) => void;
+  onSelectCluster: (id: string) => void;
+  onSelectCell: (cellId: string) => void;
+  onSelectHotspot: (id: string) => void;
+  onSelectRegion: (slug: string) => void;
 }
 
 /** Map of the main dashboard. Loaded only in the browser (see map-dashboard.tsx). */
@@ -78,15 +68,14 @@ export default function DashboardMap({
   provinceStats,
   regencyStats,
   hotspots,
-  groups,
   clusters,
   risk,
   riskOpacity,
   regionNames,
   selected,
-  focus,
   focusSlug,
-  onlyLevel,
+  focusLevel,
+  onlyLevel = null,
   highlight = null,
   fitPadding,
   onReady,
@@ -99,106 +88,90 @@ export default function DashboardMap({
   const riskOn = layers.includes("risiko");
   const boundsOn = layers.includes("batas");
   const near = tier === "dekat";
-  const highlightLevel = highlight?.kind === "risiko" ? highlight.level : null;
+  const highlightLevel = riskOn && highlight?.kind === "risiko" ? highlight.level : null;
+  const boundaryEmphasis = (level: "provinsi" | "kabupaten") => highlight?.kind === "batas" && highlight.tier === level;
+  // The choropleth follows the risk opacity slider (its default is the grid's default opacity).
+  const choroplethOpacity = riskOpacity / DEFAULT_RISK_OPACITY;
 
   // Regions stay hoverable and clickable whenever the risk or boundary layer is on.
-  const regions = tier === "provinsi" ? provinces : tier === "kabupaten" ? regencies : undefined;
-  const regionStats = tier === "provinsi" ? provinceStats : regencyStats;
-
-  const riskCells = useMemo(() => {
-    if (!risk || !onlyLevel) return risk;
-    return { ...risk, features: risk.features.filter((f) => f.properties.level_risiko === onlyLevel) };
-  }, [risk, onlyLevel]);
+  const regionLayer = (level: "provinsi" | "kabupaten") => {
+    const active = tier === level;
+    return {
+      choropleth: active && riskOn,
+      stats: level === "provinsi" ? provinceStats : regencyStats,
+      opacity: choroplethOpacity,
+      onlyLevel: riskOn ? onlyLevel : null,
+      highlightLevel: active ? highlightLevel : null,
+      interactive: active && (riskOn || boundsOn),
+      outlined: !boundsOn,
+      parentNames: regionNames,
+      hint: "Klik untuk memperbesar",
+      onSelect: onSelectRegion,
+      focus: focusLevel === level ? focusSlug : null,
+    };
+  };
 
   return (
-    <MapView
-      label={label}
-      theme={theme}
-      onReady={onReady}
-      fitPadding={fitPadding}
-      maxBounds={INDONESIA_MAX_BBOX}
-    >
-      {regions && (riskOn || boundsOn) ? (
-        <ChoroplethLayer
-          data={regions}
-          stats={regionStats}
-          theme={theme}
-          opacity={riskOn ? riskOpacity / 0.55 : 0}
-          parentNames={regionNames}
-          emphasize={focusSlug ?? undefined}
-          onlyLevel={onlyLevel}
-          highlightLevel={riskOn ? highlightLevel : null}
-          outlined={!boundsOn}
-          hint="Klik untuk memperbesar"
-          onSelect={onSelectRegion}
-        />
-      ) : null}
-      {near && layers.includes("gambut") && risk ? (
-        <PeatLayer cells={risk} theme={theme} emphasis={highlight?.kind === "gambut"} />
-      ) : null}
-      {near && riskOn && riskCells ? (
-        <RiskLayer
-          data={riskCells}
-          opacity={riskOpacity}
-          theme={theme}
-          regionNames={regionNames}
-          highlightLevel={highlightLevel}
-          onSelect={onSelectCell}
-        />
-      ) : null}
-      {boundsOn && tier === "provinsi" && provinces ? (
-        <BoundaryLayer
-          data={provinces}
-          theme={theme}
-          weight={1.3}
-          orderKey="batas-provinsi"
-          showLabel={false}
-          emphasis={highlight?.kind === "batas" && highlight.tier === "provinsi"}
-        />
-      ) : null}
-      {boundsOn && tier !== "provinsi" && regencies ? (
-        <BoundaryLayer
-          data={regencies}
-          theme={theme}
-          weight={0.7}
-          showLabel={near && !riskOn}
-          emphasis={highlight?.kind === "batas" && highlight.tier === "kabupaten"}
-        />
-      ) : null}
-      {boundsOn && tier !== "provinsi" && provinceLines ? (
-        <ProvinceLineLayer
-          data={provinceLines}
-          theme={theme}
-          emphasis={highlight?.kind === "batas" && highlight.tier === "provinsi"}
-        />
-      ) : null}
-      {focus ? <SelectionLayer shape={focus} theme={theme} orderKey="fokus" /> : null}
-      {layers.includes("zona") && clusters ? (
-        <ClusterLayer
-          data={clusters}
-          theme={theme}
-          regionNames={regionNames}
-          highlight={highlight?.kind === "zona" ? highlight.status : null}
-          onSelect={onSelectCluster}
-        />
-      ) : null}
-      {selected ? <SelectionLayer shape={selectionShape(selected)} theme={theme} /> : null}
-      {layers.includes("hotspot") && hotspots ? (
-        <HotspotLayer
-          data={hotspots}
-          regionNames={regionNames}
-          theme={theme}
-          highlight={highlight?.kind === "kepercayaan" ? highlight.level : null}
-          onSelect={onSelectHotspot}
-        />
-      ) : null}
-      {layers.includes("hotspot") && !near && groups.length > 0 ? (
-        <HotspotGroupLayer
-          groups={groups}
-          emphasis={highlight?.kind === "kelompok"}
-          dimmed={highlight?.kind === "kepercayaan"}
-        />
-      ) : null}
+    <MapView label={label} theme={theme} onReady={onReady} fitPadding={fitPadding} maxBounds={INDONESIA_MAX_BBOX}>
+      <MapInteractions>
+        {provinces ? (
+          <>
+            <RegionLayers
+              level="provinsi"
+              data={provinces}
+              {...regionLayer("provinsi")}
+              boundary={boundsOn && tier === "provinsi" ? { weight: 1.3, emphasis: boundaryEmphasis("provinsi") } : null}
+            />
+            <RegionLabelLayer level="provinsi" data={provinces} />
+          </>
+        ) : null}
+        {regencies ? (
+          <>
+            <RegionLayers
+              level="kabupaten"
+              data={regencies}
+              {...regionLayer("kabupaten")}
+              boundary={boundsOn && tier !== "provinsi" ? { weight: 0.7, emphasis: boundaryEmphasis("kabupaten") } : null}
+              nameOnHover={near && boundsOn && !riskOn}
+            />
+            <RegionLabelLayer level="kabupaten" data={regencies} />
+          </>
+        ) : null}
+        {boundsOn && tier !== "provinsi" && provinceLines ? (
+          <ProvinceLineLayer data={provinceLines} emphasis={boundaryEmphasis("provinsi")} />
+        ) : null}
+        {near && risk ? (
+          <GridLayers
+            data={risk}
+            risk={riskOn}
+            opacity={riskOpacity}
+            peat={layers.includes("gambut")}
+            peatEmphasis={highlight?.kind === "gambut"}
+            onlyLevel={riskOn ? onlyLevel : null}
+            highlightLevel={highlightLevel}
+            regionNames={regionNames}
+            onSelect={onSelectCell}
+          />
+        ) : null}
+        {layers.includes("zona") && clusters ? (
+          <ZoneLayers
+            data={clusters}
+            regionNames={regionNames}
+            highlight={highlight?.kind === "zona" ? highlight.status : null}
+            onSelect={onSelectCluster}
+          />
+        ) : null}
+        {selected ? <SelectionLayer shape={selected} /> : null}
+        {layers.includes("hotspot") && hotspots ? (
+          <HotspotLayers
+            data={hotspots}
+            regionNames={regionNames}
+            highlight={highlight?.kind === "kepercayaan" ? highlight.level : null}
+            groupEmphasis={highlight?.kind === "kelompok"}
+            onSelect={onSelectHotspot}
+          />
+        ) : null}
+      </MapInteractions>
     </MapView>
   );
 }

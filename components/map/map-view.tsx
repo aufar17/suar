@@ -1,28 +1,53 @@
 "use client";
 
-import "leaflet/dist/leaflet.css";
-import "./leaflet-icons";
+import "maplibre-gl/dist/maplibre-gl.css";
 
-import type L from "leaflet";
-import type { ReactNode } from "react";
-import { MapContainer, TileLayer } from "react-leaflet";
+import type { Map as MaplibreMap, PaddingOptions } from "maplibre-gl";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import MapGL from "react-map-gl/maplibre";
 import type { Theme } from "@/components/ui/theme";
 import { INDONESIA_BBOX } from "@/lib/geo";
 import type { BBox } from "@/types";
+import { loadBasemap, type Basemap, type MapFonts } from "./basemap";
 import { bboxToBounds } from "./bounds";
-
-// OpenStreetMap standard tiles: the most detailed place names for Indonesia among the
-// key-free providers (CARTO Voyager/Positron/Dark Matter return watermarked "API key
-// required" tiles, and the Esri Canvas reference layer only names large cities). The tiles
-// are toned down with a CSS filter on the tile pane (app/globals.css): desaturated in light
-// mode, inverted in dark mode. The data layers sit on top, translucent enough to read labels.
-const TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+import { MAP_COLORS, type MapColors } from "./colors";
+import { MapSkeleton } from "./map-skeleton";
 
 const ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &middot; Batas wilayah: <a href="https://www.geoboundaries.org/">geoBoundaries</a> (OSM, ODbL; BPS/OCHA, CC BY 3.0 IGO)';
+  'Batas wilayah: <a href="https://www.geoboundaries.org/" target="_blank" rel="noopener">geoBoundaries</a> (OSM, ODbL; BPS/OCHA, CC BY 3.0 IGO)';
 
-/** Deepest zoom; OSM tiles exist up to 19. */
-export const MAP_MAX_ZOOM = 18;
+/** Zoom range. MapLibre zoom is one step below Leaflet's for the same scale (512 px tiles). */
+export const MAP_MIN_ZOOM = 3;
+export const MAP_MAX_ZOOM = 17;
+
+interface MapStyleContextValue {
+  theme: Theme;
+  colors: MapColors;
+  fonts: MapFonts;
+}
+
+const MapStyleContext = createContext<MapStyleContextValue | null>(null);
+
+/** Theme, layer colors, and label fonts of the basemap currently shown. */
+export function useMapStyle(): MapStyleContextValue {
+  const value = useContext(MapStyleContext);
+  if (!value) throw new Error("useMapStyle dipakai di luar MapView");
+  return value;
+}
+
+function useBasemap(theme: Theme): Basemap | null {
+  const [basemap, setBasemap] = useState<Basemap | null>(null);
+  useEffect(() => {
+    let active = true;
+    loadBasemap(theme).then((next) => {
+      if (active) setBasemap(next);
+    });
+    return () => {
+      active = false;
+    };
+  }, [theme]);
+  return basemap;
+}
 
 export interface MapViewProps {
   children?: ReactNode;
@@ -31,46 +56,61 @@ export interface MapViewProps {
   /** Accessible description of the map. */
   label: string;
   theme: Theme;
-  /** Receives the Leaflet map once it exists (for custom controls outside the map). */
-  onReady?: (map: L.Map) => void;
+  /** Receives the MapLibre map once it has loaded (for controls outside the map). */
+  onReady?: (map: MaplibreMap) => void;
   /** Padding kept clear of floating panels when fitting `bbox`. */
-  fitPadding?: L.FitBoundsOptions;
-  /** Panning stops at this extent (with a little elastic give). */
+  fitPadding?: PaddingOptions;
+  /** Panning stops at this extent. */
   maxBounds?: BBox;
 }
 
-/** Base map: theme-matched tiles and one canvas renderer for many vector features. */
+/**
+ * Base map: a vector basemap per theme (a theme change swaps the whole style; the data
+ * sources and layers re-add themselves) and the slots that order the data layers.
+ */
 export function MapView({
   children,
   bbox = INDONESIA_BBOX,
   label,
   theme,
   onReady,
-  fitPadding = { padding: [8, 8] },
+  fitPadding = { top: 8, right: 8, bottom: 8, left: 8 },
   maxBounds,
 }: MapViewProps) {
+  const basemap = useBasemap(theme);
+  // Layer colors follow the style that is actually shown, not the requested theme.
+  const context = useMemo(
+    () => basemap && { theme: basemap.theme, colors: MAP_COLORS[basemap.theme], fonts: basemap.fonts },
+    [basemap],
+  );
+
+  if (!basemap || !context) return <MapSkeleton />;
   return (
-    <div role="region" aria-label={label} data-map-theme={theme} className="h-full w-full">
-      <MapContainer
-        ref={(map) => {
-          if (map) onReady?.(map);
-        }}
-        bounds={bboxToBounds(bbox)}
-        boundsOptions={fitPadding}
-        zoomSnap={0.25}
-        zoomDelta={0.5}
-        minZoom={4}
-        maxBounds={maxBounds ? bboxToBounds(maxBounds) : undefined}
-        maxBoundsViscosity={0.8}
-        maxZoom={MAP_MAX_ZOOM}
-        preferCanvas
-        zoomControl={false}
-        keyboardPanDelta={120}
-        className="h-full w-full"
-      >
-        <TileLayer attribution={ATTRIBUTION} url={TILE_URL} maxZoom={MAP_MAX_ZOOM} maxNativeZoom={19} />
-        {children}
-      </MapContainer>
+    <div role="region" aria-label={label} className="h-full w-full">
+      <MapStyleContext.Provider value={context}>
+        <MapGL
+          mapStyle={basemap.style}
+          // Swap the whole style on theme change; diffing would also strip the data layers.
+          styleDiffing={false}
+          initialViewState={{ bounds: bboxToBounds(bbox), fitBoundsOptions: { padding: fitPadding } }}
+          minZoom={MAP_MIN_ZOOM}
+          maxZoom={MAP_MAX_ZOOM}
+          maxBounds={maxBounds}
+          dragRotate={false}
+          pitchWithRotate={false}
+          touchPitch={false}
+          attributionControl={{ customAttribution: ATTRIBUTION }}
+          onLoad={(event) => {
+            const map = event.target;
+            map.touchZoomRotate.disableRotation();
+            map.keyboard.disableRotation();
+            onReady?.(map);
+          }}
+          style={{ width: "100%", height: "100%" }}
+        >
+          {children}
+        </MapGL>
+      </MapStyleContext.Provider>
     </div>
   );
 }

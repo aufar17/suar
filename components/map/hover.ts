@@ -1,42 +1,4 @@
-import L from "leaflet";
-
-/**
- * One shared tooltip for a whole feature group (cheaper than binding thousands).
- * `content` returns the HTML for the hovered child; `onHover` lets the layer
- * highlight it. Touch taps fire `mouseover` too, so the tooltip closes on click.
- */
-export function attachHoverTooltip<T extends L.Layer>(
-  map: L.Map,
-  group: L.FeatureGroup,
-  content: (layer: T) => string,
-  onHover?: (layer: T | null) => void,
-) {
-  const tooltip = L.tooltip({ className: "map-tooltip", direction: "top", offset: [0, -10], opacity: 1 });
-  let current: T | null = null;
-
-  const open = (event: L.LeafletMouseEvent) => {
-    const layer = event.propagatedFrom as T | undefined;
-    if (!layer) return;
-    if (layer !== current) {
-      current = layer;
-      onHover?.(layer);
-      tooltip.setContent(content(layer));
-    }
-    tooltip.setLatLng(event.latlng);
-    if (!map.hasLayer(tooltip)) tooltip.addTo(map);
-  };
-  const close = () => {
-    if (current) onHover?.(null);
-    current = null;
-    tooltip.remove();
-  };
-
-  group.on("mouseover", open);
-  group.on("mousemove", (event: L.LeafletMouseEvent) => tooltip.setLatLng(event.latlng));
-  group.on("mouseout", close);
-  group.on("click", () => tooltip.remove());
-  return close;
-}
+// HTML for the map tooltip (see interactions.tsx).
 
 /** Tooltip body: bold title, optional detail rows, and a hint line. */
 export function tooltipHtml(title: string, rows: [string, string][] = [], hint?: string): string {
@@ -52,7 +14,7 @@ export function tooltipHtml(title: string, rows: [string, string][] = [], hint?:
 
 const ENTITIES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 
-/** Escapes text for Leaflet tooltip HTML strings. */
+/** Escapes text for map tooltip HTML strings. */
 export function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (char) => ENTITIES[char]);
 }

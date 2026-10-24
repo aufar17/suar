@@ -1,6 +1,6 @@
 "use client";
 
-import type L from "leaflet";
+import type { Map as MaplibreMap } from "maplibre-gl";
 import { useEffect, useState } from "react";
 import type { BBox } from "@/types";
 
@@ -12,7 +12,7 @@ export interface MapViewport {
   center: [number, number];
 }
 
-function read(map: L.Map): MapViewport {
+function read(map: MaplibreMap): MapViewport {
   const bounds = map.getBounds();
   const center = map.getCenter();
   return {
@@ -26,24 +26,23 @@ function read(map: L.Map): MapViewport {
  * The map's zoom and extent, updated after panning/zooming settles (debounced), so data
  * for the visible area is not requested on every animation frame.
  */
-export function useMapViewport(map: L.Map | null, delay = 250): MapViewport | null {
+export function useMapViewport(map: MaplibreMap | null, delay = 250): MapViewport | null {
   const [viewport, setViewport] = useState<MapViewport | null>(null);
   useEffect(() => {
     if (!map) return;
     let timer = 0;
-    let active = true;
     const update = () => {
       window.clearTimeout(timer);
       timer = window.setTimeout(() => setViewport(read(map)), delay);
     };
-    map.whenReady(() => {
-      if (active) setViewport(read(map));
-    });
-    map.on("moveend zoomend resize", update);
+    // The map is passed in once it has loaded, so its extent is final.
+    update();
+    map.on("moveend", update);
+    map.on("resize", update);
     return () => {
-      active = false;
       window.clearTimeout(timer);
-      map.off("moveend zoomend resize", update);
+      map.off("moveend", update);
+      map.off("resize", update);
     };
   }, [map, delay]);
   return viewport;

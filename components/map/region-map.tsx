@@ -1,13 +1,14 @@
 "use client";
 
-import type L from "leaflet";
+import type { Map as MaplibreMap } from "maplibre-gl";
 import { useResolvedTheme } from "@/components/ui/theme";
 import type { BBox, HotspotCollection, RegionBoundaryCollection, RegionStat, RiskCellCollection } from "@/types";
-import { BoundaryLayer } from "./boundary-layer";
-import { ChoroplethLayer } from "./choropleth-layer";
-import { HotspotLayer } from "./hotspot-layer";
+import { GridLayers } from "./grid-layers";
+import { HotspotLayers } from "./hotspot-layers";
+import { MapInteractions } from "./interactions";
 import { MapView } from "./map-view";
-import { RiskLayer } from "./risk-layer";
+import { RegionLabelLayer, RegionLayers } from "./region-layers";
+import { DEFAULT_RISK_OPACITY } from "./styles";
 
 export interface RegionMapProps {
   slug: string;
@@ -21,7 +22,7 @@ export interface RegionMapProps {
   boundaries?: RegionBoundaryCollection;
   stats?: Record<string, RegionStat>;
   regionNames: Record<string, string>;
-  onReady?: (map: L.Map) => void;
+  onReady?: (map: MaplibreMap) => void;
 }
 
 /** Region page map: hotspots over the regencies' mean risk (province) or the risk grid (regency). */
@@ -40,12 +41,25 @@ export default function RegionMap({
   const theme = useResolvedTheme();
   return (
     <MapView label={`Peta risiko dan hotspot ${name}`} bbox={bbox} theme={theme} onReady={onReady}>
-      {kind === "provinsi" && boundaries ? (
-        <ChoroplethLayer data={boundaries} stats={stats} theme={theme} parentNames={regionNames} />
-      ) : null}
-      {kind === "kabupaten" && risk ? <RiskLayer data={risk} opacity={0.55} theme={theme} /> : null}
-      {kind === "kabupaten" && boundaries ? <BoundaryLayer data={boundaries} theme={theme} emphasize={slug} /> : null}
-      {hotspots ? <HotspotLayer data={hotspots} regionNames={regionNames} theme={theme} /> : null}
+      <MapInteractions>
+        {boundaries ? (
+          <>
+            <RegionLayers
+              level="kabupaten"
+              data={boundaries}
+              choropleth={kind === "provinsi"}
+              stats={stats}
+              interactive={kind === "provinsi"}
+              parentNames={regionNames}
+              boundary={kind === "kabupaten" ? { weight: 1.2 } : null}
+              emphasize={kind === "kabupaten" ? slug : null}
+            />
+            <RegionLabelLayer level="kabupaten" data={boundaries} />
+          </>
+        ) : null}
+        {kind === "kabupaten" && risk ? <GridLayers data={risk} risk opacity={DEFAULT_RISK_OPACITY} peat={false} /> : null}
+        {hotspots ? <HotspotLayers data={hotspots} regionNames={regionNames} /> : null}
+      </MapInteractions>
     </MapView>
   );
 }

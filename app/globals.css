@@ -266,51 +266,52 @@
   }
 }
 
-/* Leaflet ---------------------------------------------------------------- */
+/* MapLibre --------------------------------------------------------------- */
 
-.leaflet-container {
+.maplibregl-map {
   font-family: var(--font-sans);
   background: var(--muted);
 }
 
-.dark .leaflet-container {
+.dark .maplibregl-map {
   background: #0e0e10;
 }
 
-.leaflet-container:focus-visible {
+.maplibregl-canvas:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: -2px;
 }
 
-.leaflet-tile-pane {
-  transition: opacity 200ms ease;
-}
-
-/* OSM basemap, calmer: fewer saturated greens and pinks so data colors stand out. Only the
-   tile pane is filtered; data layers keep their real colors. */
-[data-map-theme="light"] .leaflet-tile-pane {
-  filter: saturate(0.3) brightness(1.04) contrast(0.92);
-}
-
-/* Dark mode: the same tiles inverted; labels become light text on a dark map. */
-[data-map-theme="dark"] .leaflet-tile-pane {
-  filter: invert(1) hue-rotate(180deg) saturate(0.3) brightness(0.88) contrast(0.9);
-}
-
-.leaflet-control-attribution {
+.maplibregl-ctrl.maplibregl-ctrl-attrib {
   font-size: 11px;
   border-top-left-radius: 8px;
-  background: var(--glass) !important;
+  background: var(--glass);
   color: var(--muted-foreground);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
 }
 
-.leaflet-control-attribution a {
+.maplibregl-ctrl-attrib a {
   color: var(--foreground);
 }
 
-.leaflet-tooltip.map-tooltip {
+.maplibregl-ctrl-attrib.maplibregl-compact {
+  border-radius: 12px;
+}
+
+.maplibregl-ctrl-attrib-button {
+  background-color: var(--glass);
+}
+
+.dark .maplibregl-ctrl-attrib-button {
+  filter: invert(1);
+}
+
+/* One tooltip per map, positioned by components/map/interactions.tsx. */
+.map-tooltip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  pointer-events: none;
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -322,32 +323,15 @@
   white-space: nowrap;
 }
 
-.leaflet-tooltip.map-tooltip::before {
-  display: none;
-}
-
-/* Region outline labels (no pointer events, follow the cursor). */
-.leaflet-tooltip.region-tooltip {
+/* Region names (no detail rows). */
+.map-tooltip[data-compact="true"] {
   padding: 4px 8px;
-  border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--popover);
-  color: var(--popover-foreground);
   box-shadow: var(--shadow-panel);
-  font-size: 12px;
   font-weight: 500;
 }
 
-.leaflet-tooltip.region-tooltip::before {
-  display: none;
-}
-
-/* Numbered hotspot groups at small scales (Leaflet divIcon). */
-.hotspot-group-icon {
-  background: none;
-  border: 0;
-}
-
+/* Numbered hotspot group, as drawn on the map (legend glyph). */
 .hotspot-group {
   display: flex;
   width: 100%;
@@ -358,48 +342,17 @@
   border-radius: 9999px;
   background: var(--map-hotspot);
   color: var(--map-hotspot-stroke);
-  box-shadow:
-    0 0 0 4px color-mix(in srgb, var(--map-hotspot) 22%, transparent),
-    var(--shadow-panel);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--map-hotspot) 22%, transparent);
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  cursor: pointer;
-  animation: hotspot-group-in 200ms ease-out;
-  transition:
-    box-shadow 150ms ease,
-    transform 150ms ease;
-}
-
-.hotspot-group-icon:hover .hotspot-group,
-.hotspot-group-icon:focus-visible .hotspot-group,
-.hotspot-group[data-emphasis="true"] {
-  box-shadow:
-    0 0 0 5px color-mix(in srgb, var(--map-selection) 45%, transparent),
-    var(--shadow-panel);
-}
-
-.hotspot-group[data-dimmed="true"] {
-  opacity: 0.35;
-}
-
-.hotspot-group-icon:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-  border-radius: 9999px;
-}
-
-@keyframes hotspot-group-in {
-  from {
-    opacity: 0;
-    transform: scale(0.85);
-  }
 }
 
 /* On small screens the attribution sits above the floating prediction timeline. */
 @media (max-width: 1023px) {
-  .map-frame .leaflet-bottom {
+  .map-frame .maplibregl-ctrl-bottom-right,
+  .map-frame .maplibregl-ctrl-bottom-left {
     bottom: var(--map-bottom-inset, 0px);
     transition: bottom 200ms ease;
   }

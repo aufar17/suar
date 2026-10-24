@@ -11,9 +11,8 @@ import { CLUSTER_STATUS_LABELS, CONFIDENCE_LABELS } from "@/lib/labels";
 import { getRiskLabel, RISK_LEVEL_ORDER, RISK_THRESHOLDS } from "@/lib/risk";
 import { cn } from "@/lib/utils";
 import { CLUSTER_STATUSES, CONFIDENCE_LEVELS, type ClusterStatus, type Confidence, type RiskLevel } from "@/types";
-import type { MapTier } from "./dashboard-map";
 import { GroupGlyph, HotspotGlyph, LineGlyph, PeatGlyph, ZoneStatusGlyph } from "./legend-icons";
-import { HOTSPOT_OPACITY, hotspotRadius, ZONE_STYLES } from "./styles";
+import { GRID_MIN_ZOOM, HOTSPOT_OPACITY, hotspotRadius, REGENCY_MIN_ZOOM, ZONE_STYLES, type MapTier } from "./styles";
 import type { LayerKey } from "./use-map-filters";
 
 /** Legend item under the pointer (or keyboard focus); the map emphasizes the matching objects. */
@@ -59,7 +58,7 @@ const RISK_UNITS: Record<MapTier, string> = { provinsi: "provinsi", kabupaten: "
 const RISK_DESCRIPTIONS: Record<MapTier, string> = {
   provinsi:
     "Warna = rata-rata skor semua kotak 5 km di setiap provinsi untuk hari terpilih. Perbesar untuk kabupaten/kota dan grid.",
-  kabupaten: "Warna = rata-rata skor semua kotak 5 km di setiap kabupaten/kota. Perbesar ke zoom 9 untuk grid 5 km.",
+  kabupaten: `Warna = rata-rata skor semua kotak 5 km di setiap kabupaten/kota. Perbesar ke zoom ${GRID_MIN_ZOOM} untuk grid 5 km.`,
   dekat: "Kotak grid 5×5 km, skor 0–1 dari model prediksi untuk hari terpilih.",
 };
 
@@ -259,7 +258,7 @@ export function LegendContent({
               <PeatGlyph />
             </span>
             <span className="text-[11px] leading-4 text-muted-foreground">
-              {tier === "dekat" ? "Kotak grid yang berada di lahan gambut." : "Tampil saat peta diperbesar (zoom 9 ke atas)."}
+              {tier === "dekat" ? "Kotak grid yang berada di lahan gambut." : `Tampil saat peta diperbesar (zoom ${GRID_MIN_ZOOM} ke atas).`}
             </span>
           </div>
         </Section>
@@ -275,7 +274,7 @@ export function LegendContent({
             <li {...hover({ kind: "batas", tier: "kabupaten" })} className="flex min-h-6 items-center gap-2 text-xs">
               <LineGlyph weight={0.8} />
               <span className="flex-1">Kabupaten/kota</span>
-              {tier === "provinsi" ? <span className="text-[11px] text-muted-foreground">mulai zoom 7</span> : null}
+              {tier === "provinsi" ? <span className="text-[11px] text-muted-foreground">mulai zoom {REGENCY_MIN_ZOOM}</span> : null}
             </li>
           </ul>
         </Section>

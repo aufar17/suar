@@ -1,6 +1,6 @@
 import { Loader2 } from "lucide-react";
 
-/** Placeholder with the map's footprint while Leaflet loads (no layout shift). */
+/** Placeholder with the map's footprint while the map loads (no layout shift). */
 export function MapSkeleton({ label = "Memuat peta…" }: { label?: string }) {
   return (
     <div role="status" className="relative flex h-full w-full items-center justify-center overflow-hidden bg-muted">

@@ -1,6 +1,6 @@
 "use client";
 
-import type L from "leaflet";
+import type { Map as MaplibreMap } from "maplibre-gl";
 import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import { useJson } from "@/lib/use-json";
@@ -34,7 +34,7 @@ export function RegionMapPanel({
   hotspotEnd: string;
   targetDate: string;
 }) {
-  const [map, setMap] = useState<L.Map | null>(null);
+  const [map, setMap] = useState<MaplibreMap | null>(null);
   const area = kind === "provinsi" ? `provinsi=${slug}` : `kabupaten=${slug}`;
   const hotspots = useJson<HotspotCollection>(`/api/hotspots?start=${hotspotStart}&end=${hotspotEnd}&${area}`);
   const risk = useJson<RiskCellCollection>(kind === "kabupaten" ? `/api/risk?target_date=${targetDate}&${area}` : null);

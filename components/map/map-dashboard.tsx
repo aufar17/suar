@@ -1,6 +1,6 @@
 "use client";
 
-import type L from "leaflet";
+import type { Map as MaplibreMap, PaddingOptions } from "maplibre-gl";
 import {
   ArrowRight,
   ChartColumn,
@@ -47,7 +47,6 @@ import {
   type ProvinceLineCollection,
   type Region,
   type RegionBoundaryCollection,
-  type RegionBoundaryFeature,
   type RegionIndexItem,
   type RegionStat,
   type RegionWeather,
@@ -55,14 +54,14 @@ import {
   type RiskLevel,
 } from "@/types";
 import { bboxToBounds } from "./bounds";
-import type { MapTier } from "./dashboard-map";
 import { FOCUS_REGION_EVENT } from "./focus-region";
 import { BoundaryGlyph, HotspotGlyph, PeatGlyph, RiskGlyph, ZoneGlyph } from "./legend-icons";
 import { MapControls } from "./map-controls";
 import { MapLegend, MapLegendDrawer, type LegendCounts, type LegendHighlight, type LegendProps } from "./map-legend";
 import { MapSkeleton } from "./map-skeleton";
 import { MapStatus, type MapStatusItem } from "./map-status";
-import { regionShape, type MapSelection, type SelectedFeature } from "./selection";
+import { selectionShape, type MapSelection, type SelectedFeature } from "./selection";
+import { DEFAULT_RISK_OPACITY, REGENCY_MIN_ZOOM, tierOf } from "./styles";
 import { PREDICTION_DAYS, useMapFilters } from "./use-map-filters";
 import { snapBBox, useMapViewport } from "./use-map-viewport";
 
@@ -79,23 +78,11 @@ const LAYERS: LayerOption[] = [
   { key: "gambut", label: "Lahan gambut", description: "Tampil saat peta diperbesar", icon: <PeatGlyph /> },
 ];
 
-/** Zoom thresholds of the map tiers (see MapTier). */
-const REGENCY_MIN_ZOOM = 7;
-const GRID_MIN_ZOOM = 9;
 /** Largest bbox the grid endpoint accepts (square degrees). */
 const MAX_GRID_AREA = 24;
 
-/** Default fill of the risk grid: translucent so basemap labels stay readable. */
-const DEFAULT_RISK_OPACITY = 0.55;
-
 /** Time each prediction day stays on screen while the timeline plays. */
 const PLAY_STEP_MS = 1100;
-
-function tierOf(zoom: number): MapTier {
-  if (zoom < REGENCY_MIN_ZOOM) return "provinsi";
-  if (zoom < GRID_MIN_ZOOM) return "kabupaten";
-  return "dekat";
-}
 
 const statsUrl = (level: "provinsi" | "kabupaten", query: string) => `/api/stats/regions?level=${level}&${query}`;
 const riskUrl = (targetDate: string, bbox: string) => `/api/risk?target_date=${targetDate}&bbox=${bbox}`;
@@ -112,7 +99,7 @@ export function MapDashboard({ status }: { status: DataStatus }) {
   const { filters, setFilters, toggleLayer } = useMapFilters();
   const desktop = useIsDesktop();
   const wide = useMediaQuery("(min-width: 1280px)");
-  const [map, setMap] = useState<L.Map | null>(null);
+  const [map, setMap] = useState<MaplibreMap | null>(null);
   const [selection, setSelection] = useState<MapSelection | null>(null);
   const [riskOpacity, setRiskOpacity] = useState(DEFAULT_RISK_OPACITY);
   const [panelOpen, setPanelOpen] = useState(true);
@@ -163,8 +150,9 @@ export function MapDashboard({ status }: { status: DataStatus }) {
     : tier === "provinsi"
       ? INDONESIA_MAX_BBOX.join(",")
       : snapBBox(viewport.bbox, 2).join(",");
+  // Groups are computed for Leaflet's zoom scale, one step above MapLibre's.
   const groups = useJson<GroupedHotspotCollection>(
-    hotspotsOn && !near && groupBBox ? `/api/hotspots/groups?${hotspotQuery}&zoom=${Math.floor(zoom)}&bbox=${groupBBox}` : null,
+    hotspotsOn && !near && groupBBox ? `/api/hotspots/groups?${hotspotQuery}&zoom=${Math.floor(zoom) + 1}&bbox=${groupBBox}` : null,
   );
   const nearHotspots = useJson<HotspotCollection>(
     hotspotsOn && near && viewport ? `/api/hotspots?${hotspotQuery}&bbox=${snapBBox(viewport.bbox, 0.5).join(",")}` : null,
@@ -183,7 +171,6 @@ export function MapDashboard({ status }: { status: DataStatus }) {
     }
     return { groupFeatures, singles };
   }, [near, groups.data, nearHotspots.data]);
-  const hotspotLayer = useMemo<HotspotCollection>(() => ({ type: "FeatureCollection", features: singles }), [singles]);
 
   // While playing, step to the next day once the current one has loaded and been shown.
   const tierLoading = near ? risk.loading : (tier === "provinsi" ? provinceStats : regencyStats).loading;
@@ -218,9 +205,9 @@ export function MapDashboard({ status }: { status: DataStatus }) {
   const provinceStatsBySlug = useMemo(() => byKey(provinceStats.data), [provinceStats.data]);
   const regencyStatsBySlug = useMemo(() => byKey(regencyStats.data), [regencyStats.data]);
 
-  const fitPadding: L.FitBoundsOptions = desktop
-    ? { paddingTopLeft: [324, 16], paddingBottomRight: [summaryVisible ? 324 : 72, riskOn ? 150 : 16] }
-    : { paddingTopLeft: [12, 64], paddingBottomRight: [12, riskOn ? 150 : 16] };
+  const fitPadding: PaddingOptions = desktop
+    ? { top: 16, left: 324, right: summaryVisible ? 324 : 72, bottom: riskOn ? 150 : 16 }
+    : { top: 64, left: 12, right: 12, bottom: riskOn ? 150 : 16 };
   const fitPaddingRef = useRef(fitPadding);
   useEffect(() => {
     fitPaddingRef.current = fitPadding;
@@ -235,11 +222,10 @@ export function MapDashboard({ status }: { status: DataStatus }) {
       return;
     }
     pendingFlyRef.current = null;
-    map.flyToBounds(bboxToBounds(item.bbox), {
-      ...fitPaddingRef.current,
-      maxZoom: item.level === "provinsi" ? 9 : 11,
-      duration: 0.4,
-      animate: animate && !prefersReducedMotion(),
+    map.fitBounds(bboxToBounds(item.bbox), {
+      padding: fitPaddingRef.current,
+      maxZoom: item.level === "provinsi" ? 8 : 10,
+      duration: animate && !prefersReducedMotion() ? 400 : 0,
     });
   };
   const flyToRef = useRef(flyTo);
@@ -265,12 +251,6 @@ export function MapDashboard({ status }: { status: DataStatus }) {
   }, []);
 
   const focusItem = filters.wilayah ? (indexBySlug?.[filters.wilayah] ?? null) : null;
-  const focusFeature = useMemo(() => {
-    if (!filters.wilayah) return null;
-    const source = focusItem?.level === "provinsi" ? provinces.data : regencies.data;
-    return source?.features.find((f) => f.properties.slug === filters.wilayah) ?? null;
-  }, [filters.wilayah, focusItem, provinces.data, regencies.data]);
-  const focusShape = useMemo(() => (focusFeature ? regionShape(focusFeature) : null), [focusFeature]);
 
   // The region in the middle of the map, used as summary context when nothing is focused.
   const centerRegion = useMemo((): Region | null => {
@@ -301,6 +281,7 @@ export function MapDashboard({ status }: { status: DataStatus }) {
     }
     return null;
   }, [selection, clusters.data, risk.data, singles]);
+  const selectedShape = useMemo(() => (selected ? selectionShape(selected) : null), [selected]);
 
   const weatherBySlug = useMemo(
     () => Object.fromEntries((weather.data ?? []).map((w) => [w.slug, w.cuaca])),
@@ -551,23 +532,22 @@ export function MapDashboard({ status }: { status: DataStatus }) {
           provinceLines={provinceLines.data}
           provinceStats={provinceStatsBySlug}
           regencyStats={regencyStatsBySlug}
-          hotspots={hotspotLayer}
-          groups={groupFeatures}
+          hotspots={near ? nearHotspots.data : groups.data}
           clusters={clusters.data}
           risk={riskData}
           riskOpacity={riskOpacity}
           regionNames={regionNames}
-          selected={selected}
-          focus={focusShape}
-          focusSlug={filters.wilayah}
+          selected={selectedShape}
+          focusSlug={focusItem ? focusItem.slug : null}
+          focusLevel={focusItem ? (focusItem.level === "provinsi" ? "provinsi" : "kabupaten") : null}
           onlyLevel={riskOn ? onlyLevel : null}
           highlight={legendHighlight}
           fitPadding={fitPadding}
           onReady={setMap}
-          onSelectCluster={(feature) => setSelection({ kind: "cluster", id: feature.properties.id })}
-          onSelectCell={(feature) => setSelection({ kind: "cell", id: feature.properties.cell_id })}
-          onSelectHotspot={(feature) => setSelection({ kind: "hotspot", id: feature.properties.id })}
-          onSelectRegion={(feature: RegionBoundaryFeature) => focusRegion(feature.properties.slug)}
+          onSelectCluster={(id) => setSelection({ kind: "cluster", id })}
+          onSelectCell={(id) => setSelection({ kind: "cell", id })}
+          onSelectHotspot={(id) => setSelection({ kind: "hotspot", id })}
+          onSelectRegion={focusRegion}
         />
       </div>
 

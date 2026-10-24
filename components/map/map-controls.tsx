@@ -1,6 +1,6 @@
 "use client";
 
-import type L from "leaflet";
+import type { Map as MaplibreMap, PaddingOptions } from "maplibre-gl";
 import { Locate, Minus, Plus } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
@@ -42,7 +42,7 @@ function ControlButton({
 }
 
 /**
- * Zoom and "back to the whole country" buttons. Rendered outside the Leaflet container so they are
+ * Zoom and "back to the whole country" buttons. Rendered outside the map container so they are
  * regular, keyboard-focusable buttons; the map itself also pans with arrow keys and
  * zooms with +/− once focused.
  */
@@ -50,13 +50,13 @@ export function MapControls({
   map,
   home = INDONESIA_BBOX,
   homeLabel = "Kembali ke seluruh Indonesia",
-  padding = { padding: [8, 8] },
+  padding = { top: 8, right: 8, bottom: 8, left: 8 },
   className,
 }: {
-  map: L.Map | null;
+  map: MaplibreMap | null;
   home?: BBox;
   homeLabel?: string;
-  padding?: L.FitBoundsOptions;
+  padding?: PaddingOptions;
   className?: string;
 }) {
   return (
@@ -65,16 +65,16 @@ export function MapControls({
       aria-label="Kontrol peta"
       className={cn("glass-panel flex flex-col divide-y overflow-hidden rounded-xl", className)}
     >
-      <ControlButton label="Perbesar" disabled={!map} onClick={() => map?.zoomIn()}>
+      <ControlButton label="Perbesar" disabled={!map} onClick={() => map?.zoomIn({ duration: prefersReducedMotion() ? 0 : 250 })}>
         <Plus />
       </ControlButton>
-      <ControlButton label="Perkecil" disabled={!map} onClick={() => map?.zoomOut()}>
+      <ControlButton label="Perkecil" disabled={!map} onClick={() => map?.zoomOut({ duration: prefersReducedMotion() ? 0 : 250 })}>
         <Minus />
       </ControlButton>
       <ControlButton
         label={homeLabel}
         disabled={!map}
-        onClick={() => map?.flyToBounds(bboxToBounds(home), { ...padding, duration: 0.3, animate: !prefersReducedMotion() })}
+        onClick={() => map?.fitBounds(bboxToBounds(home), { padding, duration: prefersReducedMotion() ? 0 : 300 })}
       >
         <Locate />
       </ControlButton>

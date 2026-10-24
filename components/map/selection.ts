@@ -1,4 +1,4 @@
-import type { ClusterFeature, HotspotFeature, Position, RegionBoundaryFeature, RiskCellFeature } from "@/types";
+import type { ClusterFeature, HotspotFeature, Position, RiskCellFeature } from "@/types";
 
 /** What the user clicked. Cells are kept by id so the detail follows the prediction day. */
 export type MapSelection =
@@ -19,8 +19,3 @@ export function selectionShape(selected: SelectedFeature): SelectionShape {
   return { rings: [selected.feature.geometry.coordinates[0]] };
 }
 
-/** Outer rings of a province or regency, for the selection outline. */
-export function regionShape(feature: RegionBoundaryFeature): SelectionShape {
-  const polygons = feature.geometry.type === "Polygon" ? [feature.geometry.coordinates] : feature.geometry.coordinates;
-  return { rings: polygons.map((polygon) => polygon[0]) };
-}

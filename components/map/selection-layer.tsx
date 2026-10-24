@@ -1,61 +1,59 @@
 "use client";
 
-import L from "leaflet";
-import { useEffect, useRef } from "react";
-import { useMap } from "react-leaflet";
-import type { Theme } from "@/components/ui/theme";
-import { addOrderedLayer, removeOrderedLayer, type OrderedLayer } from "./layer-order";
+import { useMemo } from "react";
+import { Layer, Source } from "react-map-gl/maplibre";
+import { slotId } from "./basemap";
+import { useMapStyle } from "./map-view";
 import type { SelectionShape } from "./selection";
 
-function shapeKey(shape: SelectionShape): string {
-  if ("point" in shape) return shape.point.join(",");
-  const vertices = shape.rings.reduce((n, ring) => n + ring.length, 0);
-  return `${shape.rings.length}:${vertices}:${shape.rings[0]?.slice(0, 4).flat().join(",")}`;
-}
-
-/**
- * Ember outline (with a halo for contrast) around the selected cell, zone, or hotspot, or —
- * with `orderKey="fokus"` — a lighter outline around the focused province or regency.
- */
-export function SelectionLayer({
-  shape,
-  theme,
-  orderKey = "sorotan",
-}: {
-  shape: SelectionShape;
-  theme: Theme;
-  orderKey?: OrderedLayer;
-}) {
-  const map = useMap();
-  // The shape object is recreated on every render; `key` identifies it.
-  const key = shapeKey(shape);
-  const shapeRef = useRef(shape);
-  useEffect(() => {
-    shapeRef.current = shape;
-  });
-  useEffect(() => {
-    const shape = shapeRef.current;
-    const halo = theme === "dark" ? "#09090B" : "#FFFFFF";
-    const ember = theme === "dark" ? "#F97A3C" : "#E8590C";
-    const focus = orderKey === "fokus";
-    const style = { fill: false, interactive: false } as const;
-    let layers: L.Path[];
-    if ("rings" in shape) {
-      const latLngs = shape.rings.map((ring) => ring.map(([lon, lat]) => L.latLng(lat, lon)));
-      layers = [
-        L.polygon(latLngs, { ...style, color: halo, weight: focus ? 4 : 5, opacity: focus ? 0.8 : 1 }),
-        L.polygon(latLngs, { ...style, color: ember, weight: focus ? 2 : 2.5 }),
-      ];
-    } else {
-      const [lon, lat] = shape.point;
-      layers = [
-        L.circleMarker([lat, lon], { ...style, radius: 14, color: halo, weight: 5 }),
-        L.circleMarker([lat, lon], { ...style, radius: 14, color: ember, weight: 2.5 }),
-      ];
-    }
-    const group = L.featureGroup(layers);
-    addOrderedLayer(map, orderKey, group);
-    return () => removeOrderedLayer(map, orderKey, group);
-  }, [map, key, theme, orderKey]);
-  return null;
+/** Ember outline (with a halo for contrast) around the selected cell or zone, or a ring around a hotspot. */
+export function SelectionLayer({ shape }: { shape: SelectionShape }) {
+  const { colors } = useMapStyle();
+  const data = useMemo(
+    () => ({
+      type: "Feature" as const,
+      properties: {},
+      geometry:
+        "point" in shape
+          ? { type: "Point" as const, coordinates: shape.point }
+          : { type: "Polygon" as const, coordinates: shape.rings },
+    }),
+    [shape],
+  );
+  if ("point" in shape) {
+    return (
+      <Source id="sorotan" type="geojson" data={data}>
+        <Layer
+          id="sorotan-halo"
+          type="circle"
+          beforeId={slotId("sorotan-titik")}
+          paint={{ "circle-radius": 14, "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": colors.halo, "circle-stroke-width": 5 }}
+        />
+        <Layer
+          id="sorotan-garis"
+          type="circle"
+          beforeId={slotId("sorotan-titik")}
+          paint={{ "circle-radius": 14, "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": colors.selection, "circle-stroke-width": 2.5 }}
+        />
+      </Source>
+    );
+  }
+  return (
+    <Source id="sorotan" type="geojson" data={data}>
+      <Layer
+        id="sorotan-halo"
+        type="line"
+        beforeId={slotId("sorotan")}
+        layout={{ "line-join": "round" }}
+        paint={{ "line-color": colors.halo, "line-width": 5 }}
+      />
+      <Layer
+        id="sorotan-garis"
+        type="line"
+        beforeId={slotId("sorotan")}
+        layout={{ "line-join": "round" }}
+        paint={{ "line-color": colors.selection, "line-width": 2.5 }}
+      />
+    </Source>
+  );
 }
