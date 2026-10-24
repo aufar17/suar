@@ -25,10 +25,6 @@ export const bboxParam = z.string().transform((value, ctx) => {
 });
 export const slugParam = z.string().regex(/^[a-z0-9-]+$/, { error: "Slug tidak valid" });
 export const levelParam = z.enum(BOUNDARY_TIERS, { error: `Nilai harus salah satu dari: ${BOUNDARY_TIERS.join(", ")}` });
-export const zoomParam = z.coerce
-  .number({ error: "Zoom harus berupa angka" })
-  .min(0, { error: "Zoom minimal 0" })
-  .max(22, { error: "Zoom maksimal 22" });
 
 /** `bbox`, `provinsi`, and `kabupaten` filters shared by the spatial endpoints. */
 export const areaParams = {

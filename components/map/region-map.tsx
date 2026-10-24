@@ -1,13 +1,14 @@
 "use client";
 
 import type { Map as MaplibreMap } from "maplibre-gl";
+import { useMemo } from "react";
 import { useResolvedTheme } from "@/components/ui/theme";
 import type { BBox, HotspotCollection, RegionBoundaryCollection, RegionStat, RiskCellCollection } from "@/types";
 import { GridLayers } from "./grid-layers";
 import { HotspotLayers } from "./hotspot-layers";
 import { MapInteractions } from "./interactions";
 import { MapView } from "./map-view";
-import { RegionLabelLayer, RegionLayers } from "./region-layers";
+import { labelPoints, RegionLabelLayer, RegionLayers } from "./region-layers";
 import { DEFAULT_RISK_OPACITY } from "./styles";
 
 export interface RegionMapProps {
@@ -39,6 +40,7 @@ export default function RegionMap({
   onReady,
 }: RegionMapProps) {
   const theme = useResolvedTheme();
+  const labels = useMemo(() => boundaries && labelPoints(boundaries), [boundaries]);
   return (
     <MapView label={`Peta risiko dan hotspot ${name}`} bbox={bbox} theme={theme} onReady={onReady}>
       <MapInteractions>
@@ -54,7 +56,7 @@ export default function RegionMap({
               boundary={kind === "kabupaten" ? { weight: 1.2 } : null}
               emphasize={kind === "kabupaten" ? slug : null}
             />
-            <RegionLabelLayer level="kabupaten" data={boundaries} />
+            {labels ? <RegionLabelLayer level="kabupaten" data={labels} /> : null}
           </>
         ) : null}
         {kind === "kabupaten" && risk ? <GridLayers data={risk} risk opacity={DEFAULT_RISK_OPACITY} peat={false} /> : null}

@@ -112,7 +112,6 @@ docs/                kontrak RPC Supabase
 | Route | Parameter |
 | --- | --- |
 | `GET /api/hotspots` | `start`, `end` (`YYYY-MM-DD`, maks. 31 hari), `min_confidence`, `bbox`, `provinsi`, `kabupaten` |
-| `GET /api/hotspots/groups` | sama dengan `/api/hotspots` + `zoom` wajib: hotspot dikelompokkan (supercluster) untuk zoom jauh |
 | `GET /api/clusters` | `date`, `bbox`, `provinsi`, `kabupaten` |
 | `GET /api/risk` | `target_date`, dan salah satu dari `bbox` (maks. 25 derajat persegi), `provinsi`, `kabupaten` |
 | `GET /api/regions` | `level` (`provinsi` default, atau `kabupaten`), `provinsi` – GeoJSON batas wilayah |

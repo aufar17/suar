@@ -51,27 +51,6 @@ export type HotspotFeature = z.infer<typeof hotspotFeatureSchema>;
 export const hotspotCollectionSchema = featureCollectionSchema(hotspotFeatureSchema);
 export type HotspotCollection = z.infer<typeof hotspotCollectionSchema>;
 
-/** A group of nearby hotspots, drawn as a numbered circle at small scales. */
-export const hotspotGroupPropsSchema = z.object({
-  kelompok: z.literal(true),
-  id: z.string(),
-  jumlah: z.number().int().positive(),
-  frp_maks: z.number().nonnegative(),
-});
-export type HotspotGroupProps = z.infer<typeof hotspotGroupPropsSchema>;
-export const hotspotGroupFeatureSchema = featureSchema(pointSchema, hotspotGroupPropsSchema);
-export type HotspotGroupFeature = z.infer<typeof hotspotGroupFeatureSchema>;
-
-/** Groups plus the hotspots that stand alone at the requested zoom. */
-export const groupedHotspotCollectionSchema = featureCollectionSchema(
-  z.union([hotspotGroupFeatureSchema, hotspotFeatureSchema]),
-);
-export type GroupedHotspotCollection = z.infer<typeof groupedHotspotCollectionSchema>;
-
-export function isHotspotGroup(feature: HotspotGroupFeature | HotspotFeature): feature is HotspotGroupFeature {
-  return "kelompok" in feature.properties;
-}
-
 // Cluster (fire zone)
 
 export const CLUSTER_STATUSES = ["baru", "meluas", "stabil", "menyusut"] as const;

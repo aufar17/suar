@@ -15,6 +15,8 @@ const PEAT_FILL = { normal: 0.26, emphasis: 0.55 };
 
 export interface GridLayersProps {
   data: RiskCellCollection;
+  /** Lowest zoom at which the grid is drawn. */
+  minzoom?: number;
   /** Risk fill ("Prediksi risiko" layer) and its opacity. */
   risk: boolean;
   opacity: number;
@@ -33,6 +35,7 @@ export interface GridLayersProps {
 /** 5 km prediction grid colored by risk level, and the peat cells under it. */
 export function GridLayers({
   data,
+  minzoom = 0,
   risk,
   opacity,
   peat,
@@ -82,6 +85,7 @@ export function GridLayers({
         id="grid-gambut"
         type="fill"
         beforeId={slotId("gambut")}
+        minzoom={minzoom}
         filter={["==", ["get", "is_gambut"], true]}
         layout={{ visibility: peat ? "visible" : "none" }}
         paint={{ "fill-color": colors.gambut, "fill-opacity": peatEmphasis ? PEAT_FILL.emphasis : PEAT_FILL.normal }}
@@ -90,6 +94,7 @@ export function GridLayers({
         id="grid-risiko"
         type="fill"
         beforeId={slotId("risiko")}
+        minzoom={minzoom}
         {...(levelFilter ? { filter: levelFilter } : {})}
         layout={{ visibility: risk ? "visible" : "none" }}
         paint={{ "fill-color": color, "fill-opacity": opacity, "fill-antialias": false }}
@@ -98,6 +103,7 @@ export function GridLayers({
         id="grid-garis"
         type="line"
         beforeId={slotId("risiko")}
+        minzoom={minzoom}
         {...(levelFilter ? { filter: levelFilter } : {})}
         layout={{ visibility: risk ? "visible" : "none" }}
         paint={{

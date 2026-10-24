@@ -28,7 +28,7 @@ import { Button } from "@/components/ui/button";
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { addDaysIso, formatDayShort, formatDecimal, formatInteger } from "@/lib/format";
-import { bboxIntersects, INDONESIA_MAX_BBOX, limitBBox, pointInBBox, pointInGeometry, ringBBox } from "@/lib/geo";
+import { bboxContains, bboxIntersects, limitBBox, pointInBBox, ringBBox } from "@/lib/geo";
 import { regionDisplayName, regionHref } from "@/lib/labels";
 import { getRiskLabel, getRiskLevel } from "@/lib/risk";
 import { prefetchJson, useJson } from "@/lib/use-json";
@@ -37,13 +37,10 @@ import { cn } from "@/lib/utils";
 import {
   CLUSTER_STATUSES,
   CONFIDENCE_LEVELS,
-  isHotspotGroup,
+  type BBox,
   type ClusterCollection,
   type DataStatus,
-  type GroupedHotspotCollection,
   type HotspotCollection,
-  type HotspotFeature,
-  type HotspotGroupFeature,
   type ProvinceLineCollection,
   type Region,
   type RegionBoundaryCollection,
@@ -60,8 +57,11 @@ import { MapControls } from "./map-controls";
 import { MapLegend, MapLegendDrawer, type LegendCounts, type LegendHighlight, type LegendProps } from "./map-legend";
 import { MapSkeleton } from "./map-skeleton";
 import { MapStatus, type MapStatusItem } from "./map-status";
+import { HOTSPOT_GROUP_LAYER } from "./hotspot-layers";
+import { regionFillLayer } from "./region-layers";
 import { selectionShape, type MapSelection, type SelectedFeature } from "./selection";
 import { DEFAULT_RISK_OPACITY, REGENCY_MIN_ZOOM, tierOf } from "./styles";
+import { useMapIdleValue } from "./use-map-idle";
 import { PREDICTION_DAYS, useMapFilters } from "./use-map-filters";
 import { snapBBox, useMapViewport } from "./use-map-viewport";
 
@@ -111,7 +111,8 @@ export function MapDashboard({ status }: { status: DataStatus }) {
   const [onlyLevel, setOnlyLevel] = useState<RiskLevel | null>(null);
   const [legendHighlight, setLegendHighlight] = useState<LegendHighlight | null>(null);
 
-  const viewport = useMapViewport(map);
+  // Updated once the map has settled (moveend + 300 ms), never while it moves.
+  const viewport = useMapViewport(map, 300);
   const zoom = viewport?.zoom ?? 5;
   const tier = tierOf(zoom);
   const near = tier === "dekat";
@@ -125,17 +126,20 @@ export function MapDashboard({ status }: { status: DataStatus }) {
   const rangeHint = start === end ? formatDayShort(end) : `${formatDayShort(start)} – ${formatDayShort(end)}`;
   const targetDate = addDaysIso(status.tanggal_data, filters.prediksi);
 
-  // Regencies, their outlines, and province borders load once the map first zooms in (or a
-  // regency is focused); afterwards they stay in memory.
-  const [regenciesWanted, setRegenciesWanted] = useState(false);
-  if (!regenciesWanted && (zoom >= REGENCY_MIN_ZOOM - 1 || (filters.wilayah !== null && tier !== "provinsi"))) {
-    setRegenciesWanted(true);
-  }
-
   // Data -----------------------------------------------------------------------------------
   const hotspotQuery = `start=${start}&end=${end}&min_confidence=${filters.conf}`;
   const statsQuery = (date: string) => `date=${date}&${hotspotQuery}`;
   const index = useJson<RegionIndexItem[]>("/api/regions/list");
+  const indexBySlug = useMemo(() => byKey(index.data), [index.data]);
+  const focusItem = filters.wilayah ? (indexBySlug?.[filters.wilayah] ?? null) : null;
+
+  // Regencies, their outlines, and province borders load once the map is zoomed to 6 or more
+  // (or a regency is focused); afterwards they stay in memory.
+  const [regenciesWanted, setRegenciesWanted] = useState(false);
+  if (!regenciesWanted && (zoom >= REGENCY_MIN_ZOOM || (focusItem !== null && focusItem.level !== "provinsi"))) {
+    setRegenciesWanted(true);
+  }
+
   const provinces = useJson<RegionBoundaryCollection>("/api/regions?level=provinsi");
   const regencies = useJson<RegionBoundaryCollection>(regenciesWanted ? "/api/regions?level=kabupaten" : null);
   const provinceLines = useJson<ProvinceLineCollection>(regenciesWanted ? "/api/regions/lines" : null);
@@ -144,33 +148,21 @@ export function MapDashboard({ status }: { status: DataStatus }) {
   const clusters = useJson<ClusterCollection>(`/api/clusters?date=${end}`);
   const weather = useJson<RegionWeather[]>("/api/weather");
 
-  // Hotspots: numbered groups far out, every hotspot of the visible area up close.
-  const groupBBox = !viewport
-    ? null
-    : tier === "provinsi"
-      ? INDONESIA_MAX_BBOX.join(",")
-      : snapBBox(viewport.bbox, 2).join(",");
-  // Groups are computed for Leaflet's zoom scale, one step above MapLibre's.
-  const groups = useJson<GroupedHotspotCollection>(
-    hotspotsOn && !near && groupBBox ? `/api/hotspots/groups?${hotspotQuery}&zoom=${Math.floor(zoom) + 1}&bbox=${groupBBox}` : null,
-  );
-  const nearHotspots = useJson<HotspotCollection>(
-    hotspotsOn && near && viewport ? `/api/hotspots?${hotspotQuery}&bbox=${snapBBox(viewport.bbox, 0.5).join(",")}` : null,
-  );
-  const gridBBox = near && viewport ? limitBBox(snapBBox(viewport.bbox, 0.5, 0.1), MAX_GRID_AREA).join(",") : null;
-  const risk = useJson<RiskCellCollection>(gridBBox ? riskUrl(targetDate, gridBBox) : null);
-  const riskData = near ? risk.data : undefined;
+  // Hotspots of the whole country: the map groups them itself (clustered source). While the
+  // layer is off nothing is requested and the last data stays on the (hidden) source.
+  const hotspots = useJson<HotspotCollection>(hotspotsOn ? `/api/hotspots?${hotspotQuery}` : null);
+  const hotspotFeatures = useMemo(() => hotspots.data?.features ?? [], [hotspots.data]);
 
-  const { groupFeatures, singles } = useMemo(() => {
-    const groupFeatures: HotspotGroupFeature[] = [];
-    const singles: HotspotFeature[] = [];
-    if (near) return { groupFeatures, singles: nearHotspots.data?.features ?? [] };
-    for (const feature of groups.data?.features ?? []) {
-      if (isHotspotGroup(feature)) groupFeatures.push(feature);
-      else singles.push(feature);
-    }
-    return { groupFeatures, singles };
-  }, [near, groups.data, nearHotspots.data]);
+  // Risk grid: only from zoom 8, for the settled view. The requested area is kept while the
+  // view stays inside it, so small pans do not refetch; a new request aborts the previous one.
+  const gridArea = near && viewport ? limitBBox(snapBBox(viewport.bbox, 0.5, 0.15), MAX_GRID_AREA) : null;
+  const [gridBBox, setGridBBox] = useState<BBox | null>(null);
+  if (gridArea && viewport && (!gridBBox || !bboxContains(gridBBox, viewport.bbox)) && gridArea.join() !== gridBBox?.join()) {
+    setGridBBox(gridArea);
+  }
+  const gridQuery = near && gridBBox ? gridBBox.join(",") : null;
+  const risk = useJson<RiskCellCollection>(gridQuery ? riskUrl(targetDate, gridQuery) : null);
+  const riskData = near ? risk.data : undefined;
 
   // While playing, step to the next day once the current one has loaded and been shown.
   const tierLoading = near ? risk.loading : (tier === "provinsi" ? provinceStats : regencyStats).loading;
@@ -190,7 +182,7 @@ export function MapDashboard({ status }: { status: DataStatus }) {
       for (const day of PREDICTION_DAYS) {
         const date = addDaysIso(status.tanggal_data, day);
         const urls = [statsUrl("provinsi", statsQuery(date)), statsUrl("kabupaten", statsQuery(date))];
-        if (gridBBox) urls.push(riskUrl(date, gridBBox));
+        if (gridQuery) urls.push(riskUrl(date, gridQuery));
         for (const url of urls) prefetchJson(url).catch(() => {});
       }
       if (filters.prediksi >= PREDICTION_DAYS.length) setFilters({ prediksi: 1 });
@@ -201,7 +193,6 @@ export function MapDashboard({ status }: { status: DataStatus }) {
   // Regions --------------------------------------------------------------------------------
   const regionNames = useMemo(() => Object.fromEntries((index.data ?? []).map((r) => [r.slug, r.nama])), [index.data]);
   const regionName = (slug: string) => regionNames[slug] ?? slug;
-  const indexBySlug = useMemo(() => byKey(index.data), [index.data]);
   const provinceStatsBySlug = useMemo(() => byKey(provinceStats.data), [provinceStats.data]);
   const regencyStatsBySlug = useMemo(() => byKey(regencyStats.data), [regencyStats.data]);
 
@@ -250,15 +241,20 @@ export function MapDashboard({ status }: { status: DataStatus }) {
     return () => window.removeEventListener(FOCUS_REGION_EVENT, onFocus);
   }, []);
 
-  const focusItem = filters.wilayah ? (indexBySlug?.[filters.wilayah] ?? null) : null;
-
-  // The region in the middle of the map, used as summary context when nothing is focused.
+  // The regency in the middle of the map (read from the rendered map once it is idle): the
+  // summary describes it up close, and its province at regency zoom levels.
+  const centerSlug = useMapIdleValue(map, (m) => {
+    const layer = regionFillLayer("kabupaten");
+    if (m.getZoom() < REGENCY_MIN_ZOOM || !m.getLayer(layer)) return null;
+    const feature = m.queryRenderedFeatures(m.project(m.getCenter()), { layers: [layer] })[0];
+    return feature ? String(feature.properties.slug) : null;
+  });
   const centerRegion = useMemo((): Region | null => {
-    if (!viewport || tier === "provinsi") return null;
-    const find = (collection?: RegionBoundaryCollection) =>
-      collection?.features.find((f) => pointInGeometry(viewport.center, f.geometry))?.properties ?? null;
-    return (near ? find(regencies.data) : null) ?? find(provinces.data);
-  }, [viewport, tier, near, regencies.data, provinces.data]);
+    if (tier === "provinsi" || !centerSlug) return null;
+    const regency = indexBySlug?.[centerSlug];
+    if (!regency) return null;
+    return near ? regency : (indexBySlug?.[regency.provinsi ?? ""] ?? null);
+  }, [tier, near, centerSlug, indexBySlug]);
 
   const context: Region | null = focusItem ?? centerRegion;
   const contextProvince = context ? (context.level === "provinsi" ? context.slug : context.provinsi) : null;
@@ -276,11 +272,11 @@ export function MapDashboard({ status }: { status: DataStatus }) {
       return feature ? { kind: "cell", feature } : null;
     }
     if (selection?.kind === "hotspot") {
-      const feature = singles.find((f) => f.properties.id === selection.id);
+      const feature = hotspotFeatures.find((f) => f.properties.id === selection.id);
       return feature ? { kind: "hotspot", feature } : null;
     }
     return null;
-  }, [selection, clusters.data, risk.data, singles]);
+  }, [selection, clusters.data, risk.data, hotspotFeatures]);
   const selectedShape = useMemo(() => (selected ? selectionShape(selected) : null), [selected]);
 
   const weatherBySlug = useMemo(
@@ -383,9 +379,8 @@ export function MapDashboard({ status }: { status: DataStatus }) {
     statusItems.push({ kind: "loading", message: "Memuat batas kabupaten/kota…" });
   }
   if (hotspotsOn) {
-    const source = near ? nearHotspots : groups;
-    if (source.error) statusItems.push({ kind: "error", message: "Gagal memuat hotspot.", onRetry: source.retry });
-    else if (source.loading && !source.data) statusItems.push({ kind: "loading", message: "Memuat hotspot…" });
+    if (hotspots.error) statusItems.push({ kind: "error", message: "Gagal memuat hotspot.", onRetry: hotspots.retry });
+    else if (hotspots.loading && !hotspots.data) statusItems.push({ kind: "loading", message: "Memuat hotspot…" });
     else if (hotspotCount === 0) statusItems.push({ kind: "empty", message: `Tidak ada hotspot di ${contextName} pada rentang ini` });
   }
   if (filters.lapisan.includes("zona") && clusters.error) {
@@ -424,6 +419,13 @@ export function MapDashboard({ status }: { status: DataStatus }) {
 
   const visibleLayers = filters.lapisan.filter((key) => LAYERS.some((layer) => layer.key === key));
 
+  // Numbered hotspot groups on screen (the grouping happens inside the map).
+  const groupCount = useMapIdleValue(map, (m) => {
+    if (!m.getLayer(HOTSPOT_GROUP_LAYER)) return 0;
+    const ids = new Set(m.queryRenderedFeatures({ layers: [HOTSPOT_GROUP_LAYER] }).map((f) => f.properties.cluster_id));
+    return ids.size;
+  });
+
   // Legend counts: objects inside the current view.
   const legendCounts = useMemo((): LegendCounts | undefined => {
     if (!viewport) return undefined;
@@ -443,16 +445,10 @@ export function MapDashboard({ status }: { status: DataStatus }) {
     }
     const byConfidence = Object.fromEntries(CONFIDENCE_LEVELS.map((c) => [c, 0])) as Record<(typeof CONFIDENCE_LEVELS)[number], number>;
     let total = 0;
-    for (const f of singles) {
+    for (const f of hotspotFeatures) {
       if (!pointInBBox(f.geometry.coordinates, view)) continue;
       byConfidence[f.properties.confidence]++;
       total++;
-    }
-    let groupCount = 0;
-    for (const g of groupFeatures) {
-      if (!pointInBBox(g.geometry.coordinates, view)) continue;
-      groupCount++;
-      total += g.properties.jumlah;
     }
     const zones = Object.fromEntries(CLUSTER_STATUSES.map((s) => [s, 0])) as Record<(typeof CLUSTER_STATUSES)[number], number>;
     for (const f of clusters.data?.features ?? []) {
@@ -461,8 +457,8 @@ export function MapDashboard({ status }: { status: DataStatus }) {
     const peat = (riskData?.features ?? []).filter(
       (f) => f.properties.is_gambut && pointInBBox(f.geometry.coordinates[0][0], view),
     ).length;
-    return { risk, hotspots: { total, byConfidence, groups: groupCount }, zones, peat };
-  }, [viewport, near, tier, riskData, provinceStats.data, regencyStats.data, indexBySlug, singles, groupFeatures, clusters.data]);
+    return { risk, hotspots: { total, byConfidence, groups: groupCount ?? 0 }, zones, peat };
+  }, [viewport, near, tier, riskData, provinceStats.data, regencyStats.data, indexBySlug, hotspotFeatures, groupCount, clusters.data]);
 
   const legendProps: LegendProps = {
     layers: visibleLayers,
@@ -532,7 +528,7 @@ export function MapDashboard({ status }: { status: DataStatus }) {
           provinceLines={provinceLines.data}
           provinceStats={provinceStatsBySlug}
           regencyStats={regencyStatsBySlug}
-          hotspots={near ? nearHotspots.data : groups.data}
+          hotspots={hotspots.data}
           clusters={clusters.data}
           risk={riskData}
           riskOpacity={riskOpacity}

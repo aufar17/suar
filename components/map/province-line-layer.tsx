@@ -8,10 +8,14 @@ import { useMapStyle } from "./map-view";
 /** Province borders at regency zoom levels; they follow the regency outlines exactly. */
 export function ProvinceLineLayer({
   data,
+  visible = true,
+  minzoom = 0,
   weight = 1.8,
   emphasis = false,
 }: {
-  data: ProvinceLineCollection;
+  data: ProvinceLineCollection | string;
+  visible?: boolean;
+  minzoom?: number;
   weight?: number;
   /** Legend hover: draw the lines heavier. */
   emphasis?: boolean;
@@ -23,7 +27,8 @@ export function ProvinceLineLayer({
         id="provinsi-garis"
         type="line"
         beforeId={slotId("batas")}
-        layout={{ "line-join": "round" }}
+        minzoom={minzoom}
+        layout={{ visibility: visible ? "visible" : "none", "line-join": "round" }}
         paint={{ "line-color": colors.boundary, "line-width": emphasis ? weight * 2 : weight, "line-opacity": emphasis ? 1 : 0.9 }}
       />
     </Source>

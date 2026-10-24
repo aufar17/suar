@@ -1,11 +1,12 @@
 "use client";
 
 import type { Map as MaplibreMap, PaddingOptions } from "maplibre-gl";
+import { useMemo } from "react";
 import { useResolvedTheme } from "@/components/ui/theme";
 import { INDONESIA_MAX_BBOX } from "@/lib/geo";
 import type {
   ClusterCollection,
-  GroupedHotspotCollection,
+  HotspotCollection,
   ProvinceLineCollection,
   RegionBoundaryCollection,
   RegionStat,
@@ -18,15 +19,16 @@ import { MapInteractions } from "./interactions";
 import type { LegendHighlight } from "./map-legend";
 import { MapView } from "./map-view";
 import { ProvinceLineLayer } from "./province-line-layer";
-import { RegionLabelLayer, RegionLayers } from "./region-layers";
+import { labelPoints, RegionLabelLayer, RegionLayers } from "./region-layers";
 import type { SelectionShape } from "./selection";
 import { SelectionLayer } from "./selection-layer";
-import { DEFAULT_RISK_OPACITY, type MapTier } from "./styles";
+import { DEFAULT_RISK_OPACITY, GRID_MIN_ZOOM, REGENCY_MIN_ZOOM, type MapTier } from "./styles";
 import type { LayerKey } from "./use-map-filters";
 import { ZoneLayers } from "./zone-layers";
 
 export interface DashboardMapProps {
   label: string;
+  /** Tier at the last settled view: decides which regions react to the pointer. */
   tier: MapTier;
   layers: LayerKey[];
   provinces?: RegionBoundaryCollection;
@@ -34,9 +36,10 @@ export interface DashboardMapProps {
   provinceLines?: ProvinceLineCollection;
   provinceStats?: Record<string, RegionStat>;
   regencyStats?: Record<string, RegionStat>;
-  /** Hotspots to draw (all of them up close, groups and isolated ones further out). */
-  hotspots?: GroupedHotspotCollection;
+  /** Hotspots of the whole country for the chosen window (grouped by the map). */
+  hotspots?: HotspotCollection;
   clusters?: ClusterCollection;
+  /** 5 km grid of the visible area (zoom ≥ 8). */
   risk?: RiskCellCollection;
   riskOpacity: number;
   regionNames: Record<string, string>;
@@ -57,7 +60,13 @@ export interface DashboardMapProps {
   onSelectRegion: (slug: string) => void;
 }
 
-/** Map of the main dashboard. Loaded only in the browser (see map-dashboard.tsx). */
+/**
+ * Map of the main dashboard. Loaded only in the browser (see map-dashboard.tsx).
+ *
+ * Every source stays mounted once its data exists; switching a layer off only hides it
+ * (`visibility`), and the zoom tiers are layer zoom ranges, so zooming never waits for React:
+ * provinces < 6, regencies 6 to < 8, the 5 km grid and single hotspots ≥ 8.
+ */
 export default function DashboardMap({
   label,
   tier,
@@ -87,29 +96,28 @@ export default function DashboardMap({
   const theme = useResolvedTheme();
   const riskOn = layers.includes("risiko");
   const boundsOn = layers.includes("batas");
-  const near = tier === "dekat";
   const highlightLevel = riskOn && highlight?.kind === "risiko" ? highlight.level : null;
   const boundaryEmphasis = (level: "provinsi" | "kabupaten") => highlight?.kind === "batas" && highlight.tier === level;
-  // The choropleth follows the risk opacity slider (its default is the grid's default opacity).
-  const choroplethOpacity = riskOpacity / DEFAULT_RISK_OPACITY;
+  // Provinces keep their fill until the regencies have loaded.
+  const provinceZoom: [number, number] = regencies ? [0, REGENCY_MIN_ZOOM] : [0, 24];
+  const regencyZoom: [number, number] = [REGENCY_MIN_ZOOM, GRID_MIN_ZOOM];
+  const provinceLabels = useMemo(() => provinces && labelPoints(provinces), [provinces]);
+  const regencyLabels = useMemo(() => regencies && labelPoints(regencies), [regencies]);
 
-  // Regions stay hoverable and clickable whenever the risk or boundary layer is on.
-  const regionLayer = (level: "provinsi" | "kabupaten") => {
-    const active = tier === level;
-    return {
-      choropleth: active && riskOn,
-      stats: level === "provinsi" ? provinceStats : regencyStats,
-      opacity: choroplethOpacity,
-      onlyLevel: riskOn ? onlyLevel : null,
-      highlightLevel: active ? highlightLevel : null,
-      interactive: active && (riskOn || boundsOn),
-      outlined: !boundsOn,
-      parentNames: regionNames,
-      hint: "Klik untuk memperbesar",
-      onSelect: onSelectRegion,
-      focus: focusLevel === level ? focusSlug : null,
-    };
-  };
+  // The choropleth follows the risk opacity slider (its default is the grid's default opacity).
+  const regionLayer = (level: "provinsi" | "kabupaten") => ({
+    choropleth: riskOn,
+    opacity: riskOpacity / DEFAULT_RISK_OPACITY,
+    onlyLevel: riskOn ? onlyLevel : null,
+    highlightLevel: tier === level ? highlightLevel : null,
+    // Regions stay hoverable and clickable whenever the risk or boundary layer is on.
+    interactive: tier === level && (riskOn || boundsOn),
+    outlined: !boundsOn,
+    parentNames: regionNames,
+    hint: "Klik untuk memperbesar",
+    onSelect: onSelectRegion,
+    focus: focusLevel === level ? focusSlug : null,
+  });
 
   return (
     <MapView label={label} theme={theme} onReady={onReady} fitPadding={fitPadding} maxBounds={INDONESIA_MAX_BBOX}>
@@ -119,10 +127,12 @@ export default function DashboardMap({
             <RegionLayers
               level="provinsi"
               data={provinces}
+              zoom={provinceZoom}
+              stats={provinceStats}
               {...regionLayer("provinsi")}
-              boundary={boundsOn && tier === "provinsi" ? { weight: 1.3, emphasis: boundaryEmphasis("provinsi") } : null}
+              boundary={boundsOn ? { weight: 1.3, zoom: provinceZoom, emphasis: boundaryEmphasis("provinsi") } : null}
             />
-            <RegionLabelLayer level="provinsi" data={provinces} />
+            {provinceLabels ? <RegionLabelLayer level="provinsi" data={provinceLabels} /> : null}
           </>
         ) : null}
         {regencies ? (
@@ -130,19 +140,27 @@ export default function DashboardMap({
             <RegionLayers
               level="kabupaten"
               data={regencies}
+              zoom={regencyZoom}
+              stats={regencyStats}
               {...regionLayer("kabupaten")}
-              boundary={boundsOn && tier !== "provinsi" ? { weight: 0.7, emphasis: boundaryEmphasis("kabupaten") } : null}
-              nameOnHover={near && boundsOn && !riskOn}
+              boundary={boundsOn ? { weight: 0.7, zoom: [REGENCY_MIN_ZOOM, 24], emphasis: boundaryEmphasis("kabupaten") } : null}
+              nameOnHover={tier === "dekat" && boundsOn && !riskOn}
             />
-            <RegionLabelLayer level="kabupaten" data={regencies} />
+            {regencyLabels ? <RegionLabelLayer level="kabupaten" data={regencyLabels} /> : null}
           </>
         ) : null}
-        {boundsOn && tier !== "provinsi" && provinceLines ? (
-          <ProvinceLineLayer data={provinceLines} emphasis={boundaryEmphasis("provinsi")} />
+        {provinceLines ? (
+          <ProvinceLineLayer
+            data={provinceLines}
+            visible={boundsOn}
+            minzoom={REGENCY_MIN_ZOOM}
+            emphasis={boundaryEmphasis("provinsi")}
+          />
         ) : null}
-        {near && risk ? (
+        {risk ? (
           <GridLayers
             data={risk}
+            minzoom={GRID_MIN_ZOOM}
             risk={riskOn}
             opacity={riskOpacity}
             peat={layers.includes("gambut")}
@@ -153,18 +171,20 @@ export default function DashboardMap({
             onSelect={onSelectCell}
           />
         ) : null}
-        {layers.includes("zona") && clusters ? (
+        {clusters ? (
           <ZoneLayers
             data={clusters}
+            visible={layers.includes("zona")}
             regionNames={regionNames}
             highlight={highlight?.kind === "zona" ? highlight.status : null}
             onSelect={onSelectCluster}
           />
         ) : null}
-        {selected ? <SelectionLayer shape={selected} /> : null}
-        {layers.includes("hotspot") && hotspots ? (
+        <SelectionLayer shape={selected} />
+        {hotspots ? (
           <HotspotLayers
             data={hotspots}
+            visible={layers.includes("hotspot")}
             regionNames={regionNames}
             highlight={highlight?.kind === "kepercayaan" ? highlight.level : null}
             groupEmphasis={highlight?.kind === "kelompok"}

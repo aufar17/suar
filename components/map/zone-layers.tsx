@@ -20,11 +20,13 @@ function dashes(status: ClusterStatus): number[] | undefined {
 /** Fire zones: faint fill and an outline whose line style shows the status. */
 export function ZoneLayers({
   data,
+  visible = true,
   regionNames,
   highlight = null,
   onSelect,
 }: {
   data: ClusterCollection;
+  visible?: boolean;
   regionNames: Record<string, string>;
   /** Legend hover: emphasize zones of this status. */
   highlight?: ClusterStatus | null;
@@ -55,6 +57,7 @@ export function ZoneLayers({
         id="zona-isi"
         type="fill"
         beforeId={slotId("zona")}
+        layout={{ visibility: visible ? "visible" : "none" }}
         paint={{
           "fill-color": colors.cluster,
           "fill-opacity": [
@@ -76,7 +79,7 @@ export function ZoneLayers({
             type="line"
             beforeId={slotId("zona")}
             filter={["==", ["get", "status"], status]}
-            layout={{ "line-cap": "round", "line-join": "round" }}
+            layout={{ visibility: visible ? "visible" : "none", "line-cap": "round", "line-join": "round" }}
             paint={{
               "line-color": colors.cluster,
               "line-width": ["case", HOVER, style.weight + 0.6, highlight === status ? style.weight + 1 : style.weight],

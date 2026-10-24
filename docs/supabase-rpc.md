@@ -85,9 +85,9 @@ $$;
 Satu hari puncak musim kebakaran bisa berisi beberapa ribu hotspot nasional, jadi buat indeks pada
 `(waktu_deteksi)`, `geom` (GiST), `provinsi`, dan `kabupaten`.
 
-**Kelompok hotspot** (`GET /api/hotspots/groups`, angka cluster di zoom jauh) dihitung di server frontend dengan
-supercluster dari hasil `get_hotspots` **tanpa** bbox untuk rentang dan tingkat kepercayaan yang sama, jadi tidak
-butuh fungsi database tersendiri.
+**Kelompok hotspot** (angka cluster di zoom jauh) dihitung di browser oleh MapLibre (source GeoJSON dengan
+`cluster: true`) dari hasil `get_hotspots` **tanpa** bbox untuk rentang dan tingkat kepercayaan terpilih, jadi tidak
+butuh fungsi database tersendiri. Endpoint `/api/hotspots/groups` sudah dihapus.
 
 ### `get_clusters`
 

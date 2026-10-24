@@ -120,3 +120,8 @@ export function limitBBox(bbox: BBox, maxArea: number): BBox {
   const r = (v: number) => Math.round(v * 1e4) / 1e4;
   return [r(cx - hw), r(cy - hh), r(cx + hw), r(cy + hh)];
 }
+
+/** True when `inner` lies completely inside `outer`. */
+export function bboxContains(outer: BBox, inner: BBox): boolean {
+  return inner[0] >= outer[0] && inner[1] >= outer[1] && inner[2] <= outer[2] && inner[3] <= outer[3];
+}
