@@ -20,10 +20,14 @@ const BAR_CLASSES: Record<RiskLevel, string> = {
   sangat_tinggi: "bg-risk-sangat-tinggi",
 };
 
-/** The five most at-risk regencies/cities (by mean risk score) for the selected target date. */
+/**
+ * The five most at-risk regencies/cities (by mean risk score) for the selected target date.
+ * `stats` must only hold regions with a prediction (see `hasPrediction`).
+ */
 export const TopRegions = memo(function TopRegions({
   stats,
   highlight,
+  emptyDescription = "Skor risiko untuk tanggal ini belum tersedia.",
   error,
   onRetry,
   className,
@@ -31,6 +35,7 @@ export const TopRegions = memo(function TopRegions({
   stats: RegionStat[] | undefined;
   /** Slug marked as the current region. */
   highlight?: string | null;
+  emptyDescription?: string;
   error?: string;
   onRetry?: () => void;
   className?: string;
@@ -68,7 +73,7 @@ export const TopRegions = memo(function TopRegions({
       <EmptyState
         icon={MapPinOff}
         title="Belum ada prediksi"
-        description="Skor risiko untuk tanggal ini belum tersedia."
+        description={emptyDescription}
         className={cn("py-6", className)}
       />
     );

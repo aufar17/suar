@@ -10,6 +10,19 @@ Cakupan data adalah **seluruh Indonesia**: 34 provinsi dan 514 kabupaten/kota (b
 Semua respons divalidasi dengan skema zod di `types/index.ts`, skema yang sama dengan data mock. Kalau bentuknya
 berbeda, frontend melempar error `Respons … tidak sesuai skema` dan route handler membalas HTTP 500.
 
+## Perubahan kontrak 2026-10-25
+
+Bagian yang berubah ditandai **[BERUBAH 2026-10-25]** di bawah ini. Ringkasan untuk repo pipeline:
+
+| # | Objek | Perubahan |
+| --- | --- | --- |
+| 1 | `get_hotspots`, `get_hotspot` | `satelit` boleh berisi `VIIRS_NOAA21` (selain `VIIRS_SNPP`, `VIIRS_NOAA20`, `MODIS`). |
+| 2 | Semua data per wilayah | Wilayah di luar provinsi yang diprediksi dikirim dengan `jumlah_sel = 0` dan skor `0`. Frontend membaca `jumlah_sel = 0` sebagai **"tidak diprediksi"** (bukan risiko rendah), lihat [Wilayah tanpa prediksi](#wilayah-tanpa-prediksi). Bentuk data tidak berubah. |
+| 3 | `get_risk_grid` | `is_gambut` di setiap elemen `sel` sekarang `0`, `1`, **atau `null`** (data gambut belum ada). |
+| 4 | `get_risk_cell` | `is_gambut` sekarang `true`, `false`, **atau `null`**. Jangan lagi `coalesce(is_gambut, false)`. |
+| 5 | `get_region_detail` | `persen_gambut` boleh `null` bila tidak satu pun kotak wilayah itu punya data gambut. |
+| 6 | `data_status` (view) | Kolom baru `gambut_tersedia boolean`. |
+
 ## Aturan umum
 
 | Hal | Aturan |
@@ -25,6 +38,23 @@ berbeda, frontend melempar error `Respons … tidak sesuai skema` dan route hand
 
 Setiap hotspot, zona, dan kotak grid **wajib** membawa `provinsi` dan `kabupaten` (slug), diisi pipeline dengan
 `ST_Intersects`/`ST_Contains` terhadap batas kabupaten/kota.
+
+### Wilayah tanpa prediksi
+
+> **[BERUBAH 2026-10-25]** Aturan baru; bentuk data tidak berubah.
+
+Pipeline hanya membuat kotak grid dan prediksi risiko untuk provinsi tertentu (provinsi rawan karhutla). Hotspot dan
+cuaca tetap untuk seluruh Indonesia. Untuk wilayah di luar cakupan itu:
+
+- `get_region_stats`: tetap satu elemen per wilayah, dengan `jumlah_sel = 0`, `rata_skor_risiko = 0`, dan
+  `maks_skor_risiko = 0`; `jumlah_hotspot` tetap diisi.
+- `get_region_detail`: `jumlah_sel = 0`, `persen_gambut = null`.
+- `get_risk_grid` tidak mengembalikan kotak untuk wilayah itu, dan `get_risk_cell` mengembalikan `null`.
+
+Frontend memakai **`jumlah_sel = 0`** sebagai satu-satunya penanda "tidak diprediksi" (`hasPrediction()` di
+`lib/risk.ts`): wilayah itu digambar abu-abu, tidak ikut peringkat, daftar "paling rawan", hitungan level risiko di
+legenda, maupun rata-rata nasional/provinsi. Jadi `jumlah_sel` **harus** 0 untuk wilayah tanpa prediksi dan lebih dari
+0 untuk wilayah yang punya prediksi, meski skornya kebetulan 0.
 
 ## Fungsi RPC
 
@@ -44,8 +74,11 @@ get_hotspots(
 ) returns jsonb             -- FeatureCollection<Point, HotspotProps>
 ```
 
-`properties`: `id`, `waktu_deteksi`, `satelit` (`VIIRS_SNPP` | `VIIRS_NOAA20` | `MODIS`), `confidence`
-(`low` | `nominal` | `high`), `frp` (MW), `provinsi`, `kabupaten`.
+`properties`: `id`, `waktu_deteksi`, `satelit` (`VIIRS_SNPP` | `VIIRS_NOAA20` | `VIIRS_NOAA21` | `MODIS`),
+`confidence` (`low` | `nominal` | `high`), `frp` (MW), `provinsi`, `kabupaten`.
+
+> **[BERUBAH 2026-10-25]** `satelit` boleh `VIIRS_NOAA21` (sumber FIRMS `VIIRS_NOAA21_NRT`). Nilai lain ditolak skema
+> frontend, jadi petakan nama sumber FIRMS ke salah satu dari empat nilai di atas.
 
 Contoh implementasi:
 
@@ -145,11 +178,20 @@ permintaan baru — hanya nilai feature-state yang berubah.
 
 - `ukuran_sel` = panjang sisi kotak dalam derajat.
 - `kabupaten` = slug kabupaten/kota yang dirujuk kotak (indeks berbasis 0).
-- Setiap elemen `sel`: `[cell_id, min_lon, min_lat, is_gambut (0|1), indeks kabupaten, skor×1000 untuk setiap
+- Setiap elemen `sel`: `[cell_id, min_lon, min_lat, is_gambut (0|1|null), indeks kabupaten, skor×1000 untuk setiap
   tanggal di tanggal_target]` — skor dibulatkan ke bilangan bulat 0–1000, koordinat 4–5 desimal.
+- **[BERUBAH 2026-10-25]** `is_gambut` = `1` (gambut), `0` (bukan gambut), atau `null` (data gambut belum ada untuk
+  kotak itu). Jangan ubah `null` menjadi `0`:
+
+  ```sql
+  case when c.is_gambut is null then null when c.is_gambut then 1 else 0 end
+  ```
+
+- **[BERUBAH 2026-10-25]** Hanya kotak di wilayah yang diprediksi (lihat
+  [Wilayah tanpa prediksi](#wilayah-tanpa-prediksi)); filter untuk wilayah lain menghasilkan `sel: []`.
 - Dengan bbox, kotak yang **bersinggungan** dengan bbox ikut dikembalikan.
 
-Grid nasional berisi ±76.000 kotak, jadi frontend **selalu** mengirim salah satu filter: bbox (maksimal 40 derajat
+Grid bisa berisi puluhan ribu kotak (±76.000 bila seluruh daratan diprediksi), jadi frontend **selalu** mengirim salah satu filter: bbox (maksimal 40 derajat
 persegi, dipakai peta saat zoom ≥ 8), `provinsi_slug`, atau `kabupaten_slug` (peta halaman kabupaten). Pada zoom
 lebih jauh peta memakai rata-rata per wilayah dari `get_region_stats`.
 
@@ -161,9 +203,13 @@ get_risk_cell(cell_id text, target_date date) returns jsonb  -- Feature<Polygon,
 
 Satu kotak lengkap untuk panel detail (dipanggil saat kotak diklik). `properties`: `cell_id`, `tanggal_prediksi`,
 `tanggal_target`, `skor_risiko` (0–1), `level_risiko` (`rendah` < 0,25 ≤ `sedang` < 0,5 ≤ `tinggi` < 0,75 ≤
-`sangat_tinggi`), `is_gambut`, `faktor` (array 3 objek `{ fitur, label, kontribusi }`, diurutkan dari nilai SHAP
-absolut terbesar), `provinsi`, `kabupaten`. Kembalikan `null` jika kotak tidak ada atau belum punya prediksi untuk
-`target_date`.
+`sangat_tinggi`), `is_gambut` (`true` | `false` | `null`), `faktor` (array 3 objek `{ fitur, label, kontribusi }`,
+diurutkan dari nilai SHAP absolut terbesar), `provinsi`, `kabupaten`. Kembalikan `null` jika kotak tidak ada atau belum
+punya prediksi untuk `target_date`.
+
+> **[BERUBAH 2026-10-25]** `is_gambut` dikirim apa adanya: `null` berarti data gambut belum tersedia, dan panel detail
+> menampilkan "Data gambut belum tersedia". Fungsi **tidak boleh** lagi mengubah `null` menjadi `false`
+> (`'is_gambut', c.is_gambut`, bukan `coalesce(c.is_gambut, false)`).
 
 ### `get_region_boundaries`
 
@@ -207,6 +253,10 @@ wilayah (`ST_PointOnSurface`), `persen_gambut` 0–100 dari kotak grid bergambut
 itu, `jumlah_kabupaten` = jumlah kabupaten/kota di provinsi (0 untuk kabupaten/kota), `nama_provinsi` = nama provinsi
 induk (`null` untuk provinsi). Kembalikan `null` jika slug tidak ada (frontend lalu menampilkan 404).
 
+> **[BERUBAH 2026-10-25]** `persen_gambut` = persentase kotak bergambut di antara kotak yang **punya** data gambut
+> (`is_gambut is not null`), atau `null` bila tidak ada satu pun (termasuk wilayah tanpa kotak). Wilayah tanpa
+> prediksi: `jumlah_sel = 0`.
+
 ### `get_monthly_trend`
 
 ```sql
@@ -241,6 +291,8 @@ kabupaten/kota (514, atau yang ada di `provinsi_slug`), **termasuk** wilayah tan
 - `rata_skor_risiko` dan `maks_skor_risiko` = rata-rata dan maksimum `skor_risiko` semua kotak wilayah itu untuk
   `target_date` (0 jika belum ada prediksi). `jumlah_sel` = jumlah kotak yang punya prediksi (dipakai sebagai bobot
   rata-rata nasional).
+- **[BERUBAH 2026-10-25]** `jumlah_sel = 0` menandai wilayah tanpa prediksi; skor 0-nya diabaikan frontend (lihat
+  [Wilayah tanpa prediksi](#wilayah-tanpa-prediksi)).
 - Urutkan menurun berdasarkan `rata_skor_risiko`.
 
 Karena dipanggil untuk setiap hari prediksi dan setiap perubahan filter, sebaiknya dihitung dari tabel ringkasan
@@ -254,7 +306,7 @@ Dibaca langsung dengan `supabase.from(...)`.
 | --- | --- | --- |
 | `regions` (tabel) | `id`, `slug`, `nama`, `level`, `provinsi` | Semua provinsi, kabupaten, dan kota. `provinsi` = slug induk (`null` untuk provinsi). Frontend mengurutkan berdasarkan `nama`. |
 | `weather_latest` (view) | `slug`, `nama`, `level`, `provinsi`, `tanggal`, `suhu_c`, `kelembapan_persen`, `curah_hujan_mm`, `kecepatan_angin_kmh`, `hari_tanpa_hujan` | Satu baris per kabupaten/kota (snapshot cuaca terbaru) **ditambah** satu baris per provinsi berisi rata-rata kabupaten/kotanya (`hari_tanpa_hujan` dibulatkan ke bilangan bulat). Daftar cuaca memfilter `level <> 'provinsi'`. |
-| `data_status` (view) | `terakhir_diperbarui`, `tanggal_data`, `prediksi_mulai`, `prediksi_sampai` | Tepat satu baris. `terakhir_diperbarui` = waktu pipeline terakhir selesai (format WIB seperti di atas); `tanggal_data` = tanggal hotspot/cuaca terbaru; `prediksi_mulai`/`prediksi_sampai` = rentang `tanggal_target` prediksi terbaru. Frontend menambahkan `sumber: "supabase"`. |
+| `data_status` (view) | `terakhir_diperbarui`, `tanggal_data`, `prediksi_mulai`, `prediksi_sampai`, `gambut_tersedia` | Tepat satu baris. `terakhir_diperbarui` = waktu pipeline terakhir selesai (format WIB seperti di atas); `tanggal_data` = tanggal hotspot/cuaca terbaru; `prediksi_mulai`/`prediksi_sampai` = rentang `tanggal_target` prediksi terbaru. **[BERUBAH 2026-10-25]** `gambut_tersedia` (`boolean`, tidak boleh `null`) = ada minimal satu kotak grid dengan `is_gambut` `true` atau `false`, misalnya `exists (select 1 from grid_cells where is_gambut is not null)`; jika `false`, lapisan "Lahan gambut" dinonaktifkan dengan keterangan "Data belum tersedia". Frontend menambahkan `sumber: "supabase"`. |
 
 ## Hak akses
 

@@ -9,7 +9,7 @@ import { RegionSelect } from "@/components/filters/region-select";
 import { ScoreGauge } from "@/components/panels/risk-detail";
 import { StatTile } from "@/components/panels/stat-tile";
 import { DownloadCsvButton } from "@/components/ui/download-button";
-import { RiskBadge } from "@/components/ui/risk-badge";
+import { NoPredictionBadge, RiskBadge } from "@/components/ui/risk-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/state";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -24,7 +24,7 @@ import {
   shiftMonth,
 } from "@/lib/format";
 import { regionDisplayName } from "@/lib/labels";
-import { getRiskLevel } from "@/lib/risk";
+import { getRiskLevel, hasPrediction, NO_PREDICTION_MESSAGE } from "@/lib/risk";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
@@ -83,19 +83,21 @@ async function StatsContent({ searchParams }: { searchParams: PageProps<"/statis
   const peakIndex = trend.reduce((best, d, i) => (d.jumlah_hotspot > trend[best].jumlah_hotspot ? i : best), 0);
   const peak = trend[peakIndex];
 
-  // Mean risk of the scope, weighted by grid cells for the whole country.
+  // Mean risk of the scope; for the whole country weighted by grid cells, over the predicted
+  // provinces only (the others have no cells and a score that was not computed).
   const scopeStat = regency
     ? regencyStats.find((s) => s.slug === regency.slug)
     : province
       ? provinceStats.find((s) => s.slug === province.slug)
       : undefined;
-  const nationalCells = provinceStats.reduce((n, s) => n + s.jumlah_sel, 0);
+  const predictedProvinces = provinceStats.filter((s) => hasPrediction(s));
+  const nationalCells = predictedProvinces.reduce((n, s) => n + s.jumlah_sel, 0);
+  const cellCount = scope ? (scopeStat && hasPrediction(scopeStat) ? scopeStat.jumlah_sel : 0) : nationalCells;
   const meanRisk = scope
     ? (scopeStat?.rata_skor_risiko ?? 0)
     : nationalCells
-      ? provinceStats.reduce((s, p) => s + p.rata_skor_risiko * p.jumlah_sel, 0) / nationalCells
+      ? predictedProvinces.reduce((s, p) => s + p.rata_skor_risiko * p.jumlah_sel, 0) / nationalCells
       : 0;
-  const cellCount = scope ? (scopeStat?.jumlah_sel ?? 0) : nationalCells;
   const meanLevel = getRiskLevel(meanRisk);
 
   const scopeName = scope ? regionDisplayName(scope) : "Indonesia";
@@ -170,14 +172,25 @@ async function StatsContent({ searchParams }: { searchParams: PageProps<"/statis
           label="Rata-rata skor risiko besok"
           icon={Gauge}
           value={
-            <span className="flex items-center gap-3">
-              {formatDecimal(meanRisk)}
-              <RiskBadge level={meanLevel} className="font-sans" />
-            </span>
+            cellCount ? (
+              <span className="flex items-center gap-3">
+                {formatDecimal(meanRisk)}
+                <RiskBadge level={meanLevel} className="font-sans" />
+              </span>
+            ) : (
+              <span className="flex items-center gap-3">
+                –
+                <NoPredictionBadge className="font-sans" />
+              </span>
+            )
           }
-          hint={`${cellCount ? formatInteger(cellCount) : "–"} kotak grid · ${riskDateLabel}`}
+          hint={
+            cellCount
+              ? `${formatInteger(cellCount)} kotak grid${scope ? "" : ` di ${formatInteger(predictedProvinces.length)} provinsi`} · ${riskDateLabel}`
+              : `${NO_PREDICTION_MESSAGE}.`
+          }
           className="sm:col-span-2"
-          figure={<ScoreGauge score={meanRisk} level={meanLevel} />}
+          figure={cellCount ? <ScoreGauge score={meanRisk} level={meanLevel} /> : undefined}
         />
       </div>
 

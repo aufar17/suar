@@ -1,7 +1,8 @@
 // HTML for the map tooltip (see interactions.tsx).
 
-/** Tooltip body: bold title, optional detail rows, and a hint line. */
-export function tooltipHtml(title: string, rows: [string, string][] = [], hint?: string): string {
+/** Tooltip body: bold title, an optional note under it, optional detail rows, and a hint line. */
+export function tooltipHtml(title: string, rows: [string, string][] = [], hint?: string, note?: string): string {
+  const notice = note ? `<div style="margin-bottom:${rows.length ? 4 : 0}px">${escapeHtml(note)}</div>` : "";
   const body = rows
     .map(
       ([label, value]) =>
@@ -9,7 +10,7 @@ export function tooltipHtml(title: string, rows: [string, string][] = [], hint?:
     )
     .join("");
   const footer = hint ? `<div style="margin-top:4px;color:var(--muted-foreground);font-size:11px">${escapeHtml(hint)}</div>` : "";
-  return `<div style="font-weight:600;margin-bottom:${rows.length ? 4 : 0}px">${title}</div>${body}${footer}`;
+  return `<div style="font-weight:600;margin-bottom:${rows.length || note ? 4 : 0}px">${title}</div>${notice}${body}${footer}`;
 }
 
 const ENTITIES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };

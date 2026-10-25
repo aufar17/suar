@@ -11,7 +11,7 @@ import { Segmented } from "@/components/ui/segmented";
 import { EmptyState } from "@/components/ui/state";
 import { formatDecimal, formatInteger } from "@/lib/format";
 import { regionHref } from "@/lib/labels";
-import { getRiskLevel } from "@/lib/risk";
+import { getRiskLevel, hasPrediction, NO_PREDICTION_MESSAGE } from "@/lib/risk";
 import { cn } from "@/lib/utils";
 import type { RegionStat, RiskLevel } from "@/types";
 
@@ -24,7 +24,10 @@ const RISK_BAR: Record<RiskLevel, string> = {
   sangat_tinggi: "bg-risk-sangat-tinggi",
 };
 
-/** Horizontal bar ranking of regions, sortable by hotspot count or mean risk score. Rows slide when re-sorted. */
+/**
+ * Horizontal bar ranking of regions, sortable by hotspot count or mean risk score. Rows slide when
+ * re-sorted. Regions without a prediction are ranked by hotspots only (their score is not computed).
+ */
 export function RegionRanking({
   stats,
   highlight,
@@ -43,9 +46,14 @@ export function RegionRanking({
 }) {
   const [sort, setSort] = useState<SortKey>("hotspot");
   const [expanded, setExpanded] = useState(false);
-  const sorted = [...stats].sort((a, b) =>
-    sort === "hotspot" ? b.jumlah_hotspot - a.jumlah_hotspot : b.rata_skor_risiko - a.rata_skor_risiko,
-  );
+  const predicted = stats.filter((s) => hasPrediction(s));
+  const unpredicted = stats.filter((s) => !hasPrediction(s));
+  const sorted =
+    sort === "hotspot"
+      ? [...stats].sort((a, b) => b.jumlah_hotspot - a.jumlah_hotspot)
+      : [...predicted].sort((a, b) => b.rata_skor_risiko - a.rata_skor_risiko);
+  // The CSV keeps every region; regions without a prediction have empty scores.
+  const csvRows = sort === "hotspot" ? sorted : [...sorted, ...unpredicted];
   const maxHotspot = Math.max(1, ...stats.map((s) => s.jumlah_hotspot));
   if (stats.length === 0) {
     return <EmptyState icon={MapPinOff} title="Belum ada data peringkat" description="Statistik wilayah belum tersedia untuk periode ini." />;
@@ -69,21 +77,30 @@ export function RegionRanking({
           label="CSV"
           filename={filename}
           header={["slug", "nama", "level", "provinsi", "jumlah_hotspot", "rata_skor_risiko", "maks_skor_risiko"]}
-          rows={sorted.map((s) => [
+          rows={csvRows.map((s) => [
             s.slug,
             s.nama,
             s.level,
             s.provinsi ?? "",
             s.jumlah_hotspot,
-            s.rata_skor_risiko,
-            s.maks_skor_risiko,
+            hasPrediction(s) ? s.rata_skor_risiko : "",
+            hasPrediction(s) ? s.maks_skor_risiko : "",
           ])}
           className="h-9"
         />
       </div>
       <p className="text-xs text-muted-foreground" aria-live="polite">
-        {sort === "hotspot" ? `Jumlah hotspot, ${hotspotPeriod}.` : `Rata-rata skor risiko prediksi untuk ${riskDateLabel}.`}
+        {sort === "hotspot"
+          ? `Jumlah hotspot, ${hotspotPeriod}.`
+          : `Rata-rata skor risiko prediksi untuk ${riskDateLabel}.${
+              unpredicted.length && predicted.length
+                ? ` ${formatInteger(unpredicted.length)} wilayah tanpa prediksi tidak diurutkan.`
+                : ""
+            }`}
       </p>
+      {sorted.length === 0 ? (
+        <EmptyState icon={MapPinOff} title="Belum ada prediksi" description={`${NO_PREDICTION_MESSAGE}.`} className="py-6" />
+      ) : null}
       <ol className="flex flex-col">
         {(limit && !expanded ? sorted.slice(0, limit) : sorted).map((region, index) => {
           const value = sort === "hotspot" ? region.jumlah_hotspot / maxHotspot : region.rata_skor_risiko;

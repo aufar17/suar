@@ -26,6 +26,7 @@ export function RegionMapPanel({
   hotspotStart,
   hotspotEnd,
   targetDate,
+  predicted,
 }: {
   slug: string;
   name: string;
@@ -36,13 +37,15 @@ export function RegionMapPanel({
   hotspotStart: string;
   hotspotEnd: string;
   targetDate: string;
+  /** The region has a risk prediction; otherwise the map shows hotspots and boundaries only. */
+  predicted: boolean;
 }) {
   const [map, setMap] = useState<MaplibreMap | null>(null);
   const area = kind === "provinsi" ? `provinsi=${slug}` : `kabupaten=${slug}`;
   const hotspotUrl = `/api/hotspots?start=${hotspotStart}&end=${hotspotEnd}&${area}`;
   const hotspots = useSourceStatus(map, HOTSPOT_SOURCE, hotspotUrl);
   const boundaries = useSourceStatus(map, regionSource("kabupaten"), GEO_FILES.kabupaten);
-  const grid = useJson<RiskGrid>(kind === "kabupaten" ? `/api/risk/grid?${area}` : null);
+  const grid = useJson<RiskGrid>(kind === "kabupaten" && predicted ? `/api/risk/grid?${area}` : null);
   const index = useJson<RegionIndexItem[]>("/api/regions/list");
   const stats = useJson<RegionStat[]>(
     kind === "provinsi" ? `/api/stats/regions?level=kabupaten&provinsi=${slug}&date=${targetDate}` : null,
@@ -72,17 +75,20 @@ export function RegionMapPanel({
         grid={grid.data}
         targetDate={targetDate}
         stats={statsBySlug}
+        predicted={predicted}
         regionNames={regionNames}
         onReady={setMap}
       />
       <p className="glass-panel absolute top-3 left-3 z-[500] flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs">
-        <HotspotGlyph size={8} /> Hotspot 7 hari · {kind === "provinsi" ? "rata-rata risiko besok" : "risiko besok"}
+        <HotspotGlyph size={8} /> Hotspot 7 hari
+        {predicted ? ` · ${kind === "provinsi" ? "rata-rata risiko besok" : "risiko besok"}` : ""}
       </p>
       <MapStatus items={status} className="absolute inset-x-0 top-14 z-[600] px-4" />
       <MapControls map={map} home={bbox} homeLabel={`Kembali ke ${name}`} className="absolute top-3 right-3 z-[500]" />
       <MapLegend
-        layers={["risiko", "hotspot", "batas"]}
+        layers={predicted ? ["risiko", "hotspot", "batas"] : ["hotspot", "batas"]}
         tier={kind === "provinsi" ? "kabupaten" : "dekat"}
+        showUnpredicted={kind === "provinsi"}
         rangeLabel="7 hari"
         defaultOpen={false}
         className="absolute bottom-12 left-3 z-[500] w-56 sm:bottom-3"

@@ -16,8 +16,11 @@ export interface MockGrid {
   kabupaten: string[];
   /** Province slug of each entry in `kabupaten`. */
   provinsi: string[];
-  /** [row, col, kabupatenIndex, isGambut (0|1), NDVI × 100, hotspots within 10 km in the last 7 days] */
-  cells: [number, number, number, 0 | 1, number, number][];
+  /**
+   * Cells of the predicted provinces only: [row, col, kabupatenIndex, isGambut (0|1, null = no
+   * peat data), NDVI × 100, hotspots within 10 km in the last 7 days]
+   */
+  cells: [number, number, number, 0 | 1 | null, number, number][];
 }
 
 export interface MockHotspots {
@@ -48,4 +51,5 @@ export interface MockWeather {
 
 export type MockRegions = RegionBoundaryCollection;
 export type MockClusters = ClusterCollection;
-export type MockStatus = DataStatus;
+/** `gambut_tersedia` is derived from the grid by lib/data/mock.ts. */
+export type MockStatus = Omit<DataStatus, "gambut_tersedia">;

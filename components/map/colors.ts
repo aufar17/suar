@@ -13,6 +13,8 @@ export interface MapColors {
   hotspotStroke: string;
   cluster: string;
   gambut: string;
+  /** Fill of regions without a risk prediction (--map-unpredicted with alpha). */
+  unpredicted: string;
   selection: string;
   halo: string;
   /** Basemap and region labels. */
@@ -30,6 +32,7 @@ export const MAP_COLORS: Record<Theme, MapColors> = {
     hotspotStroke: "#FFFFFF",
     cluster: "#18181B",
     gambut: "#8A6A2F",
+    unpredicted: "rgba(113,113,122,0.4)",
     selection: "#E8590C",
     halo: "#FFFFFF",
     label: "#27272A",
@@ -44,6 +47,7 @@ export const MAP_COLORS: Record<Theme, MapColors> = {
     hotspotStroke: "#09090B",
     cluster: "#FAFAFA",
     gambut: "#C9B67A",
+    unpredicted: "rgba(161,161,170,0.32)",
     selection: "#F97A3C",
     halo: "#09090B",
     label: "#E4E4E7",

@@ -9,6 +9,7 @@ export const CONFIDENCE_LABELS: Record<Confidence, string> = {
 export const SATELLITE_LABELS: Record<Satellite, string> = {
   VIIRS_SNPP: "VIIRS S-NPP",
   VIIRS_NOAA20: "VIIRS NOAA-20",
+  VIIRS_NOAA21: "VIIRS NOAA-21",
   MODIS: "MODIS",
 };
 

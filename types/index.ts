@@ -98,7 +98,8 @@ export const riskCellPropsSchema = z.object({
   tanggal_target: isoDateSchema,
   skor_risiko: z.number().min(0).max(1),
   level_risiko: riskLevelSchema,
-  is_gambut: z.boolean(),
+  /** `null` = no peat data for this cell yet (not "not peat"). */
+  is_gambut: z.boolean().nullable(),
   faktor: z.array(riskFactorSchema), // top 3 factors
   ...regionRefs,
 });
@@ -108,11 +109,17 @@ export const riskCellFeatureSchema = featureSchema(polygonSchema, riskCellPropsS
 export type RiskCellFeature = z.infer<typeof riskCellFeatureSchema>;
 
 /**
- * One cell of the compact grid: [cell_id, min_lon, min_lat, is_gambut (0|1), index into
- * `kabupaten`, then skor_risiko × 1000 for each date in `tanggal_target`].
+ * One cell of the compact grid: [cell_id, min_lon, min_lat, is_gambut (0|1, null = no peat
+ * data yet), index into `kabupaten`, then skor_risiko × 1000 for each date in `tanggal_target`].
  */
 export const riskGridCellSchema = z.tuple(
-  [z.string(), z.number(), z.number(), z.union([z.literal(0), z.literal(1)]), z.number().int().nonnegative()],
+  [
+    z.string(),
+    z.number(),
+    z.number(),
+    z.union([z.literal(0), z.literal(1), z.null()]),
+    z.number().int().nonnegative(),
+  ],
   z.number().int().min(0).max(1000),
 );
 export type RiskGridCell = z.infer<typeof riskGridCellSchema>;
@@ -174,7 +181,9 @@ export const regionDetailSchema = regionSchema.extend({
   bbox: bboxSchema,
   pusat: positionSchema, // [lon, lat], inside the region
   luas_km2: z.number().nonnegative(),
-  persen_gambut: z.number().min(0).max(100),
+  /** Share of the region's grid cells on peat; `null` when none of its cells has peat data. */
+  persen_gambut: z.number().min(0).max(100).nullable(),
+  /** Grid cells of the region; 0 = no risk prediction for this region (see `hasPrediction`). */
   jumlah_sel: z.number().int().nonnegative(),
   /** Regencies and cities in a province; 0 for regencies. */
   jumlah_kabupaten: z.number().int().nonnegative(),
@@ -216,9 +225,10 @@ export const regionStatSchema = z.object({
   level: regionLevelSchema,
   provinsi: z.string().nullable(),
   jumlah_hotspot: z.number().int().nonnegative(),
+  /** 0 for regions without a prediction: "not computed", not low risk (see `hasPrediction`). */
   rata_skor_risiko: z.number().min(0).max(1),
   maks_skor_risiko: z.number().min(0).max(1),
-  /** Grid cells with a prediction (weight for national averages). */
+  /** Grid cells with a prediction (weight for national averages); 0 = no prediction. */
   jumlah_sel: z.number().int().nonnegative(),
 });
 export type RegionStat = z.infer<typeof regionStatSchema>;
@@ -232,6 +242,8 @@ export const dataStatusSchema = z.object({
   /** First and last target date that has a risk prediction. */
   prediksi_mulai: isoDateSchema,
   prediksi_sampai: isoDateSchema,
+  /** At least one grid cell has peat data (`is_gambut` true or false); otherwise the peat layer is disabled. */
+  gambut_tersedia: z.boolean(),
   sumber: z.enum(["mock", "supabase"]),
 });
 export type DataStatus = z.infer<typeof dataStatusSchema>;

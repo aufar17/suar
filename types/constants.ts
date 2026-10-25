@@ -10,7 +10,7 @@ export const CONFIDENCE_RANK: Record<Confidence, number> = {
   high: 2,
 };
 
-export const SATELLITES = ["VIIRS_SNPP", "VIIRS_NOAA20", "MODIS"] as const;
+export const SATELLITES = ["VIIRS_SNPP", "VIIRS_NOAA20", "VIIRS_NOAA21", "MODIS"] as const;
 export type Satellite = (typeof SATELLITES)[number];
 
 export const CLUSTER_STATUSES = ["baru", "meluas", "stabil", "menyusut"] as const;

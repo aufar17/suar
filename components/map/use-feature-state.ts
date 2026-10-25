@@ -21,6 +21,8 @@ export function useFeatureStates(sourceId: string, states: FeatureStates | null)
     const map = mapRef.getMap();
     statesRef.current = states;
     const apply = () => {
+      // `map.style` is gone after `map.remove()` (unmount, Fast Refresh) and after a WebGL context loss.
+      if (!map.style) return;
       const source = map.getSource(sourceId);
       if (!source) return;
       const applied = appliedRef.current;

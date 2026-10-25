@@ -9,6 +9,10 @@
  * centre lies inside a regency, and every hotspot lies on land. Fire activity follows the
  * known pattern: peatlands of Riau, Jambi, South Sumatra and Kalimantan, savanna burning in
  * East Nusa Tenggara, and the southern Papua lowlands, peaking July–October.
+ *
+ * Like the real pipeline, hotspots and weather cover the whole country, but only the provinces
+ * in PREDICTED_PROVINCES get grid cells and a risk prediction, and some of those have no peat
+ * data yet (is_gambut null).
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -168,6 +172,19 @@ const FIRE: Record<string, FireClimate> = {
 const DEFAULT_FIRE: FireClimate = { weight: 0.05, season: SEASONS.basah, wetness: 0.6 };
 const fireOf = (provinsi: string) => FIRE[provinsi] ?? DEFAULT_FIRE;
 
+/** Provinces with grid cells and a risk prediction; every other region has 0 cells ("not computed"). */
+const PREDICTED_PROVINCES = new Set([
+  "riau",
+  "jambi",
+  "sumatera-selatan",
+  "kalimantan-barat",
+  "kalimantan-tengah",
+  "kalimantan-selatan",
+  "kalimantan-timur",
+]);
+/** Predicted provinces whose cells have no peat data yet (is_gambut null). */
+const NO_PEAT_DATA = new Set(["kalimantan-selatan", "kalimantan-timur"]);
+
 /** Only the southern lowlands of Papua burn regularly; the highlands and the north are wet. */
 function localFactor(provinsi: string, [, lat]: Position): number {
   if (provinsi === "papua") return lat < -6.3 ? 1.8 : 0.08;
@@ -269,7 +286,8 @@ function pickCell(month: number): Cell {
 // ---------------------------------------------------------------------------
 // Hotspots (24 months)
 
-const SATELLITES = ["VIIRS_SNPP", "VIIRS_NOAA20", "MODIS"] as const;
+const SATELLITES = ["VIIRS_SNPP", "VIIRS_NOAA20", "VIIRS_NOAA21", "MODIS"] as const;
+const MODIS = SATELLITES.indexOf("MODIS");
 const CONFIDENCES = ["low", "nominal", "high"] as const;
 
 /** National mean daily hotspots per unit of monthly fire intensity. */
@@ -324,7 +342,7 @@ function spawnCenter(month: number): FireCenter {
 function detectionTime(sat: number): number {
   const day = rand() < 0.75;
   let minutes: number;
-  if (sat === 2) minutes = day ? (rand() < 0.5 ? 10 * 60 + 20 : 13 * 60 + 20) + randInt(0, 40) : 22 * 60 + 20 + randInt(0, 40);
+  if (sat === MODIS) minutes = day ? (rand() < 0.5 ? 10 * 60 + 20 : 13 * 60 + 20) + randInt(0, 40) : 22 * 60 + 20 + randInt(0, 40);
   else minutes = (day ? 13 * 60 : 60) + randInt(0, 80);
   return Math.floor(minutes / 60) * 100 + (minutes % 60);
 }
@@ -381,7 +399,9 @@ for (let d = 0; d < totalDays; d++) {
     } else {
       ({ pos, kab } = jitterInCell(pickCell(month - 1)));
     }
-    const sat = rand() < 0.4 ? 0 : rand() < 0.67 ? 1 : 2;
+    // VIIRS on NOAA-20 and NOAA-21 share one orbit, half an orbit apart: they split one share.
+    const pick = rand() < 0.4 ? 0 : rand() < 0.67 ? 1 : 2;
+    const sat = pick === 0 ? 0 : pick === 1 ? 1 + (k % 2) : MODIS;
     const frp = round(clamp(Math.exp(gaussian(Math.log(6), 0.9)), 0.3, 250), 1);
     let conf: number;
     const r = rand();
@@ -595,26 +615,29 @@ const nearbyCounts = cells.map(({ center: [x, y] }) => {
 });
 
 const targets = Array.from({ length: 7 }, (_, t) => addDaysIso(END_DATE, t + 1));
+const peatOf = (cell: Cell): boolean | null => (NO_PEAT_DATA.has(kabs[cell.kab].provinsi) ? null : cell.gambut);
+/** Indices of the cells that are written out (predicted provinces only). */
+const predicted = cells.flatMap((cell, i) => (PREDICTED_PROVINCES.has(kabs[cell.kab].provinsi) ? [i] : []));
 const cellNoise = cells.map(() => gaussian(0, 0.25));
 const risk: MockRisk = { tanggal_prediksi: END_DATE, targets, scores: [], cuaca: [] };
 
 targets.forEach((_, t) => {
   risk.cuaca.push(forecast.map((list) => [list[t + 1].dry, list[t + 1].humidity]));
-  risk.scores.push(
-    cells.map((cell, i) => {
-      const day = forecast[cell.kab][t + 1];
-      const values = contributionValues({
-        dry: day.dry,
-        humidity: day.humidity,
-        gambut: cell.gambut,
-        hotspots: nearbyCounts[i],
-        ndvi: cell.ndvi,
-        dayOffset: t,
-      });
-      const logit = RISK_INTERCEPT + values.reduce((sum, v) => sum + v, 0) + cellNoise[i] + gaussian(0, 0.08);
-      return Math.round(1000 / (1 + Math.exp(-logit)));
-    }),
-  );
+  // Every cell is scored (keeps the random sequence stable), only the predicted ones are kept.
+  const scores = cells.map((cell, i) => {
+    const day = forecast[cell.kab][t + 1];
+    const values = contributionValues({
+      dry: day.dry,
+      humidity: day.humidity,
+      gambut: peatOf(cell),
+      hotspots: nearbyCounts[i],
+      ndvi: cell.ndvi,
+      dayOffset: t,
+    });
+    const logit = RISK_INTERCEPT + values.reduce((sum, v) => sum + v, 0) + cellNoise[i] + gaussian(0, 0.08);
+    return Math.round(1000 / (1 + Math.exp(-logit)));
+  });
+  risk.scores.push(predicted.map((i) => scores[i]));
 });
 
 // ---------------------------------------------------------------------------
@@ -628,7 +651,11 @@ const grid: MockGrid = {
   origin: ORIGIN,
   kabupaten: kabSlugs,
   provinsi: kabProvinces,
-  cells: cells.map((c, i) => [c.row, c.col, c.kab, c.gambut ? 1 : 0, Math.round(c.ndvi * 100), nearbyCounts[i]]),
+  cells: predicted.map((i) => {
+    const c = cells[i];
+    const peat = peatOf(c);
+    return [c.row, c.col, c.kab, peat === null ? null : peat ? 1 : 0, Math.round(c.ndvi * 100), nearbyCounts[i]];
+  }),
 };
 
 const hotspotFile: MockHotspots = {
@@ -676,7 +703,12 @@ const latestByProvince = new Map<string, number>();
 for (const h of latest) latestByProvince.set(kabs[h.kab].provinsi, (latestByProvince.get(kabs[h.kab].provinsi) ?? 0) + 1);
 
 console.log(`Rentang data    : ${START_DATE} s.d. ${END_DATE}`);
-console.log(`Kotak grid      : ${cells.length} (gambut ${peatCount})`);
+const predictedPeat = predicted.filter((i) => peatOf(cells[i]) === true).length;
+const predictedNoPeatData = predicted.filter((i) => peatOf(cells[i]) === null).length;
+console.log(`Kotak daratan   : ${cells.length} (gambut ${peatCount})`);
+console.log(
+  `Kotak grid      : ${predicted.length} di ${PREDICTED_PROVINCES.size} provinsi (gambut ${predictedPeat}, tanpa data gambut ${predictedNoPeatData})`,
+);
 console.log(`Hotspot         : ${totalHotspots} (hari terakhir ${latest.length})`);
 console.log(
   `Hari terakhir   : ${[...latestByProvince.entries()]

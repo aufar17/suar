@@ -5,12 +5,19 @@ import { AnimatePresence, motion } from "motion/react";
 import { memo, useId, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
-import { RiskSwatch } from "@/components/ui/risk-badge";
+import { NoPredictionSwatch, RiskSwatch } from "@/components/ui/risk-badge";
 import { formatDate, formatDecimal, formatInteger } from "@/lib/format";
-import { CLUSTER_STATUS_LABELS, CONFIDENCE_LABELS } from "@/lib/labels";
-import { getRiskLabel, RISK_LEVEL_ORDER, RISK_THRESHOLDS } from "@/lib/risk";
+import { CLUSTER_STATUS_LABELS, CONFIDENCE_LABELS, SATELLITE_LABELS } from "@/lib/labels";
+import { getRiskLabel, NO_PREDICTION_LABEL, RISK_LEVEL_ORDER, RISK_THRESHOLDS } from "@/lib/risk";
 import { cn } from "@/lib/utils";
-import { CLUSTER_STATUSES, CONFIDENCE_LEVELS, type ClusterStatus, type Confidence, type RiskLevel } from "@/types/constants";
+import {
+  CLUSTER_STATUSES,
+  CONFIDENCE_LEVELS,
+  SATELLITES,
+  type ClusterStatus,
+  type Confidence,
+  type RiskLevel,
+} from "@/types/constants";
 import { GroupGlyph, HotspotGlyph, LineGlyph, PeatGlyph, ZoneStatusGlyph } from "./legend-icons";
 import { GRID_MIN_ZOOM, HOTSPOT_OPACITY, hotspotRadius, REGENCY_MIN_ZOOM, ZONE_STYLES, type MapTier } from "./styles";
 import type { LayerKey } from "./use-map-filters";
@@ -18,6 +25,7 @@ import type { LayerKey } from "./use-map-filters";
 /** Legend item under the pointer (or keyboard focus); the map emphasizes the matching objects. */
 export type LegendHighlight =
   | { kind: "risiko"; level: RiskLevel }
+  | { kind: "tanpa_prediksi" }
   | { kind: "kepercayaan"; level: Confidence }
   | { kind: "kelompok" }
   | { kind: "zona"; status: ClusterStatus }
@@ -26,10 +34,15 @@ export type LegendHighlight =
 
 /** Objects currently shown on the map, per legend item. */
 export interface LegendCounts {
+  /** Regions or cells per level; regions without a prediction are counted in `unpredicted` only. */
   risk?: Record<RiskLevel, number>;
+  /** Regions without a prediction (province and regency tiers). */
+  unpredicted?: number;
   hotspots?: { total: number; byConfidence: Record<Confidence, number>; groups: number };
   zones?: Record<ClusterStatus, number>;
   peat?: number;
+  /** Cells without peat data. */
+  peatUnknown?: number;
 }
 
 export interface LegendProps {
@@ -40,6 +53,8 @@ export interface LegendProps {
   onlyLevel?: RiskLevel | null;
   onOnlyLevelChange?: (level: RiskLevel | null) => void;
   onHighlight?: (highlight: LegendHighlight | null) => void;
+  /** Show the "Tidak diprediksi" item (off where the map draws no region fill). */
+  showUnpredicted?: boolean;
   /** Latest data date (YYYY-MM-DD) and hotspot window label, e.g. "24 jam". */
   dataDate?: string;
   rangeLabel?: string;
@@ -61,6 +76,8 @@ const RISK_DESCRIPTIONS: Record<MapTier, string> = {
   kabupaten: `Warna = rata-rata skor semua kotak 5 km di setiap kabupaten/kota. Perbesar ke zoom ${GRID_MIN_ZOOM} untuk grid 5 km.`,
   dekat: "Kotak grid 5×5 km, skor 0–1 dari model prediksi untuk hari terpilih.",
 };
+
+const SATELLITE_NAMES = SATELLITES.map((satellite) => SATELLITE_LABELS[satellite]).join(", ");
 
 /** FRP examples for the size scale (MW). */
 const FRP_EXAMPLES = [5, 50, 200];
@@ -106,6 +123,7 @@ export function LegendContent({
   onlyLevel = null,
   onOnlyLevelChange,
   onHighlight,
+  showUnpredicted = true,
   dataDate,
   rangeLabel,
   mock,
@@ -166,9 +184,24 @@ export function LegendContent({
                 </li>
               );
             })}
+            {showUnpredicted ? (
+              <li>
+                <span
+                  {...hover({ kind: "tanpa_prediksi" })}
+                  className="flex min-h-8 items-center gap-2 text-xs"
+                >
+                  <NoPredictionSwatch />
+                  <span className="flex-1">{NO_PREDICTION_LABEL}</span>
+                  <span className="w-12 text-right">
+                    <Count value={tier === "dekat" ? undefined : counts?.unpredicted} />
+                  </span>
+                </span>
+              </li>
+            ) : null}
           </ul>
           <p className="text-[11px] leading-4 text-muted-foreground">
             Rendah tidak diwarnai agar peta tetap terbaca.
+            {showUnpredicted ? " Wilayah tanpa prediksi diberi warna abu-abu; skornya tidak dihitung." : ""}
             {onOnlyLevelChange ? (
               onlyLevel ? (
                 <>
@@ -261,6 +294,11 @@ export function LegendContent({
               {tier === "dekat" ? "Kotak grid yang berada di lahan gambut." : `Tampil saat peta diperbesar (zoom ${GRID_MIN_ZOOM} ke atas).`}
             </span>
           </div>
+          {tier === "dekat" && counts?.peatUnknown ? (
+            <p className="text-[11px] leading-4 text-muted-foreground">
+              Data gambut belum tersedia untuk {formatInteger(counts.peatUnknown)} kotak di layar.
+            </p>
+          ) : null}
         </Section>
       ) : null}
 
@@ -287,7 +325,9 @@ export function LegendContent({
             {mock ? " · data contoh" : ""}
           </p>
         ) : null}
-        <p>Sumber: NASA FIRMS (hotspot), model prediksi Suar (risiko), geoBoundaries (batas wilayah).</p>
+        <p>
+          Sumber: NASA FIRMS (hotspot {SATELLITE_NAMES}), model prediksi Suar (risiko), geoBoundaries (batas wilayah).
+        </p>
         <p className="flex items-start gap-1.5 text-foreground">
           <Info aria-hidden="true" className="mt-px size-3 shrink-0" />
           Hotspot belum tentu kebakaran terkonfirmasi.

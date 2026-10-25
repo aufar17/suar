@@ -26,7 +26,7 @@ import {
   DrawerTrigger,
 } from "@/components/ui/drawer";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { RiskBadge, RiskSwatch } from "@/components/ui/risk-badge";
+import { NoPredictionBadge, NoPredictionSwatch, RiskBadge, RiskSwatch } from "@/components/ui/risk-badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
@@ -58,7 +58,7 @@ const COLOR_TOKENS = [
   "ember-soft",
 ];
 
-const MAP_TOKENS = ["map-hotspot", "map-cluster", "map-boundary", "map-gambut", "map-selection"];
+const MAP_TOKENS = ["map-hotspot", "map-cluster", "map-boundary", "map-gambut", "map-unpredicted", "map-selection"];
 const CHART_TOKENS = ["chart-1", "chart-2", "chart-3", "chart-4", "chart-5"];
 
 const DEMO_CHART = [
@@ -125,6 +125,12 @@ export function UiShowcase() {
               <RiskBadge level={level} size="lg" />
             </div>
           ))}
+          <div className="flex items-center gap-2">
+            <NoPredictionSwatch />
+            <NoPredictionBadge />
+            <NoPredictionBadge size="sm" />
+            <NoPredictionBadge size="lg" />
+          </div>
         </div>
       </Section>
 

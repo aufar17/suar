@@ -1,4 +1,4 @@
-import { getRiskLabel, RISK_BADGE_CLASSES } from "@/lib/risk";
+import { getRiskLabel, NO_PREDICTION_LABEL, RISK_BADGE_CLASSES } from "@/lib/risk";
 import { cn } from "@/lib/utils";
 import type { RiskLevel } from "@/types";
 
@@ -45,6 +45,41 @@ export function RiskSwatch({ level, className }: { level: RiskLevel; className?:
         level === "sangat_tinggi" && "bg-risk-sangat-tinggi",
         className,
       )}
+    />
+  );
+}
+
+/** Chip for a region without a risk prediction: neutral and dashed, so it never reads as "Rendah". */
+export function NoPredictionBadge({
+  size = "md",
+  label = NO_PREDICTION_LABEL,
+  className,
+}: {
+  size?: "sm" | "md" | "lg";
+  label?: string;
+  className?: string;
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full border border-dashed border-muted-foreground/60 font-medium whitespace-nowrap text-muted-foreground",
+        size === "sm" && "px-2 py-0.5 text-[11px]",
+        size === "md" && "px-2.5 py-0.5 text-xs",
+        size === "lg" && "px-3 py-1 text-sm",
+        className,
+      )}
+    >
+      {label}
+    </span>
+  );
+}
+
+/** Legend swatch for regions without a prediction: the neutral wash drawn on the map. */
+export function NoPredictionSwatch({ className }: { className?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cn("inline-block size-3.5 shrink-0 rounded-[4px] bg-[var(--map-unpredicted)]/40", className)}
     />
   );
 }

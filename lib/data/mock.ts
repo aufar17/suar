@@ -106,6 +106,15 @@ function inArea(filter: AreaFilter, provinsi: string, kabupaten: string): boolea
 
 const GRID_BUCKET = 1; // degrees
 
+/** `gambut` of a cell without peat data. */
+const NO_PEAT = -1;
+
+/**
+ * MOCK_TANPA_GAMBUT=1 drops the peat data of every cell (as before the pipeline has a peat map),
+ * to check the disabled "Lahan gambut" layer. Read once per server process.
+ */
+const noPeatData = () => process.env.MOCK_TANPA_GAMBUT === "1";
+
 interface GridIndex {
   cellSize: number;
   ids: string[];
@@ -115,7 +124,8 @@ interface GridIndex {
   lon: Float64Array;
   lat: Float64Array;
   kab: Int32Array;
-  gambut: Uint8Array;
+  /** 1 = peat, 0 = mineral soil, NO_PEAT = no peat data. */
+  gambut: Int8Array;
   ndvi: Float64Array;
   hotspots: Int32Array;
   kabSlugs: string[];
@@ -139,7 +149,7 @@ const loadGrid = memo(async (): Promise<GridIndex> => {
     lon: new Float64Array(n),
     lat: new Float64Array(n),
     kab: new Int32Array(n),
-    gambut: new Uint8Array(n),
+    gambut: new Int8Array(n),
     ndvi: new Float64Array(n),
     hotspots: new Int32Array(n),
     kabSlugs: grid.kabupaten,
@@ -156,7 +166,7 @@ const loadGrid = memo(async (): Promise<GridIndex> => {
     index.lon[i] = lon;
     index.lat[i] = lat;
     index.kab[i] = kab;
-    index.gambut[i] = gambut;
+    index.gambut[i] = gambut === null || noPeatData() ? NO_PEAT : gambut;
     index.ndvi[i] = ndvi / 100;
     index.hotspots[i] = hotspots;
     const push = (map: Map<string, number[]>, key: string) => {
@@ -170,6 +180,10 @@ const loadGrid = memo(async (): Promise<GridIndex> => {
   });
   return index;
 });
+
+function cellPeat(grid: GridIndex, i: number): boolean | null {
+  return grid.gambut[i] === NO_PEAT ? null : grid.gambut[i] === 1;
+}
 
 function cellBBox(grid: GridIndex, i: number): BBox {
   const r4 = (v: number) => Math.round(v * 1e4) / 1e4;
@@ -275,11 +289,11 @@ async function riskFeatures(targetDate: string, indices: number[]): Promise<Risk
         tanggal_target: targetDate,
         skor_risiko: score,
         level_risiko: getRiskLevel(score),
-        is_gambut: grid.gambut[i] === 1,
+        is_gambut: cellPeat(grid, i),
         faktor: topRiskFactors({
           dry,
           humidity,
-          gambut: grid.gambut[i] === 1,
+          gambut: cellPeat(grid, i),
           hotspots: grid.hotspots[i],
           ndvi: grid.ndvi[i],
           dayOffset: t,
@@ -479,7 +493,8 @@ export const mockDataSource: DataSource = {
         kabIndex.set(k, ki);
         kabupaten.push(grid.kabSlugs[k]);
       }
-      return [grid.ids[i], grid.lon[i], grid.lat[i], grid.gambut[i] === 1 ? 1 : 0, ki, ...risk.scores.map((day) => day[i])];
+      const peat = cellPeat(grid, i);
+      return [grid.ids[i], grid.lon[i], grid.lat[i], peat === null ? null : peat ? 1 : 0, ki, ...risk.scores.map((day) => day[i])];
     });
     const result: RiskGrid = {
       tanggal_prediksi: risk.tanggal_prediksi,
@@ -523,7 +538,9 @@ export const mockDataSource: DataSource = {
       0,
     );
     const cells = (p.level === "provinsi" ? grid.byProv : grid.byKab).get(slug) ?? [];
-    const peat = cells.reduce((n, i) => n + grid.gambut[i], 0);
+    // Share of the cells with peat data; null when none of them has any.
+    const known = cells.filter((i) => grid.gambut[i] !== NO_PEAT);
+    const peat = known.filter((i) => grid.gambut[i] === 1).length;
     const parent = p.provinsi ? regions.bySlug.get(p.provinsi) : undefined;
     const detail: RegionDetail = {
       id: p.id,
@@ -535,7 +552,7 @@ export const mockDataSource: DataSource = {
       bbox: p.bbox,
       pusat: p.label as Position,
       luas_km2: Math.round(area),
-      persen_gambut: cells.length ? Math.round((peat / cells.length) * 1000) / 10 : 0,
+      persen_gambut: known.length ? Math.round((peat / known.length) * 1000) / 10 : null,
       jumlah_sel: cells.length,
       jumlah_kabupaten: p.level === "provinsi" ? (regions.children.get(slug)?.length ?? 0) : 0,
     };
@@ -622,6 +639,7 @@ export const mockDataSource: DataSource = {
   },
 
   async getDataStatus(): Promise<DataStatus> {
-    return loadStatus();
+    const [status, grid] = await Promise.all([loadStatus(), loadGrid()]);
+    return { ...status, gambut_tersedia: grid.gambut.some((value) => value !== NO_PEAT) };
   },
 };

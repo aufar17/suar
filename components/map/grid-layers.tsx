@@ -75,7 +75,7 @@ export function GridLayers({
               [
                 ["Skor", formatDecimal(state.skor)],
                 ["Wilayah", regionNames?.[p.kabupaten] ?? p.kabupaten],
-                ["Lahan", p.is_gambut ? "Gambut" : "Mineral"],
+                ["Lahan", p.is_gambut == null ? "Data gambut belum tersedia" : p.is_gambut ? "Gambut" : "Mineral"],
               ],
               "Klik untuk detail",
             );

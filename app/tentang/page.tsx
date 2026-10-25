@@ -16,11 +16,13 @@ import {
 } from "lucide-react";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { RiskBadge, RiskSwatch } from "@/components/ui/risk-badge";
+import { NoPredictionBadge, NoPredictionSwatch, RiskBadge, RiskSwatch } from "@/components/ui/risk-badge";
 import { TableOfContents } from "@/components/ui/table-of-contents";
-import { getDataStatus } from "@/lib/data";
+import { getDataStatus, getRegionStats } from "@/lib/data";
 import { formatDate, formatDecimal } from "@/lib/format";
-import { RISK_LEVEL_ORDER, RISK_THRESHOLDS } from "@/lib/risk";
+import { SATELLITE_LABELS } from "@/lib/labels";
+import { hasPrediction, RISK_LEVEL_ORDER, RISK_THRESHOLDS } from "@/lib/risk";
+import { SATELLITES } from "@/types/constants";
 
 export const metadata: Metadata = {
   title: "Tentang",
@@ -35,10 +37,13 @@ const SECTIONS = [
   { id: "keterbatasan", label: "Keterbatasan" },
 ];
 
+/** "A, B, dan C" */
+const listFormat = new Intl.ListFormat("id", { type: "conjunction" });
+
 const SOURCES: { name: string; use: string; href: string; icon: LucideIcon }[] = [
   {
     name: "NASA FIRMS",
-    use: "Titik panas (hotspot) untuk seluruh wilayah Indonesia dari satelit VIIRS S-NPP, VIIRS NOAA-20, dan MODIS, termasuk tingkat kepercayaan dan FRP.",
+    use: `Titik panas (hotspot) untuk seluruh wilayah Indonesia dari satelit ${listFormat.format(SATELLITES.map((s) => SATELLITE_LABELS[s]))}, termasuk tingkat kepercayaan dan FRP.`,
     href: "https://firms.modaps.eosdis.nasa.gov/",
     icon: Satellite,
   },
@@ -56,7 +61,7 @@ const SOURCES: { name: string; use: string; href: string; icon: LucideIcon }[] =
   },
   {
     name: "Peta lahan gambut",
-    use: "Sebaran lahan gambut nasional (Kementerian Pertanian / KLHK) untuk menandai kotak grid bergambut.",
+    use: "Sebaran lahan gambut nasional (Kementerian Pertanian / KLHK) untuk menandai kotak grid bergambut. Untuk sebagian wilayah data ini belum tersedia; kotaknya ditandai “Data gambut belum tersedia”.",
     href: "https://sigap.menlhk.go.id/",
     icon: Sprout,
   },
@@ -78,7 +83,7 @@ const STEPS: { title: string; body: ReactNode; icon: LucideIcon }[] = [
   {
     title: "Grid 5 km",
     icon: Grid3x3,
-    body: "Daratan Indonesia dibagi menjadi sekitar 76.000 kotak berukuran 5×5 km. Setiap kotak punya atribut cuaca, tutupan lahan, status gambut, dan riwayat hotspot, serta tercatat provinsi dan kabupaten/kotanya. Di peta skala nasional, skor kotak dirata-ratakan per provinsi atau kabupaten/kota.",
+    body: "Daratan provinsi yang diprediksi dibagi menjadi kotak berukuran 5×5 km. Setiap kotak punya atribut cuaca, tutupan lahan, status gambut, dan riwayat hotspot, serta tercatat provinsi dan kabupaten/kotanya. Di peta skala nasional, skor kotak dirata-ratakan per provinsi atau kabupaten/kota.",
   },
   {
     title: "Model klasifikasi",
@@ -140,6 +145,11 @@ function Section({ id, eyebrow, title, children }: { id: string; eyebrow: string
 
 export default async function TentangPage() {
   const status = await getDataStatus();
+  const provinceStats = await getRegionStats({ date: status.prediksi_mulai, level: "provinsi" });
+  const predictedProvinces = provinceStats
+    .filter((s) => hasPrediction(s))
+    .map((s) => s.nama)
+    .sort((a, b) => a.localeCompare(b, "id"));
   const ranges: Record<string, string> = {
     rendah: `< ${formatDecimal(RISK_THRESHOLDS.sedang)}`,
     sedang: `${formatDecimal(RISK_THRESHOLDS.sedang)} – < ${formatDecimal(RISK_THRESHOLDS.tinggi)}`,
@@ -161,8 +171,9 @@ export default async function TentangPage() {
           Melihat api lebih awal, sebelum membesar.
         </h1>
         <p className="mt-5 text-lg leading-8 text-pretty text-muted-foreground">
-          Suar adalah peringatan dini kebakaran hutan dan lahan: memantau titik panas dan memperkirakan risiko kebakaran hutan dan
-          lahan di seluruh Indonesia, dari tingkat provinsi sampai kotak 5 km, untuk tujuh hari ke depan.
+          Suar adalah peringatan dini kebakaran hutan dan lahan: memantau titik panas di seluruh Indonesia dan memperkirakan
+          risiko kebakaran hutan dan lahan di provinsi rawan karhutla, dari tingkat provinsi sampai kotak 5 km, untuk tujuh
+          hari ke depan.
         </p>
         {status.sumber === "mock" ? (
           <div className="mt-6 flex gap-3 rounded-2xl border border-ember/40 bg-ember-soft p-4 text-sm leading-6">
@@ -201,6 +212,12 @@ export default async function TentangPage() {
                 </li>
               ))}
             </ol>
+            <p>
+              Prediksi risiko saat ini hanya dibuat untuk provinsi rawan karhutla
+              {predictedProvinces.length ? `: ${listFormat.format(predictedProvinces)}` : ""}. Wilayah lain tetap
+              menampilkan hotspot dan cuaca, tetapi ditandai “Tidak diprediksi” dan tidak ikut dalam peringkat maupun
+              rata-rata risiko.
+            </p>
           </Section>
 
           <Section id="sumber-data" eyebrow="03" title="Sumber data">
@@ -266,6 +283,18 @@ export default async function TentangPage() {
                       <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">{meanings[level]}</td>
                     </tr>
                   ))}
+                  <tr className="border-t">
+                    <td className="px-4 py-3">
+                      <span className="flex items-center gap-2">
+                        <NoPredictionSwatch />
+                        <NoPredictionBadge size="sm" />
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 font-mono whitespace-nowrap">–</td>
+                    <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">
+                      Di luar cakupan prediksi; skor tidak dihitung, bukan berarti risikonya rendah. Abu-abu di peta.
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </div>

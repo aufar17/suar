@@ -30,7 +30,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { addDaysIso, formatDayShort, formatDecimal, formatInteger } from "@/lib/format";
 import { bboxContains, bboxIntersects, limitBBox, MAX_GRID_BBOX_DEG2, pointInBBox } from "@/lib/geo";
 import { regionDisplayName, regionHref } from "@/lib/labels";
-import { getRiskLabel, getRiskLevel } from "@/lib/risk";
+import { getRiskLabel, getRiskLevel, hasPrediction, NO_PREDICTION_LABEL, NO_PREDICTION_MESSAGE } from "@/lib/risk";
 import { prefetchJson, useJson } from "@/lib/use-json";
 import { prefersReducedMotion, useIsDesktop, useMediaQuery } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
@@ -78,6 +78,10 @@ const LAYERS: LayerOption[] = [
   { key: "gambut", label: "Lahan gambut", description: "Tampil saat peta diperbesar", icon: <PeatGlyph /> },
 ];
 
+/** The peat layer stays listed but disabled while no grid cell has peat data. */
+const LAYERS_WITHOUT_PEAT: LayerOption[] = LAYERS.map((layer) =>
+  layer.key === "gambut" ? { ...layer, description: "Data belum tersedia", disabled: true } : layer,
+);
 
 /** Time each prediction day stays on screen while the timeline plays. */
 const PLAY_STEP_MS = 1100;
@@ -105,6 +109,12 @@ function byKey<T extends { slug: string }>(items: T[] | undefined) {
 
 export function MapDashboard({ status }: { status: DataStatus }) {
   const { filters, setFilters, toggleLayer, view } = useMapFilters();
+  const layerOptions = status.gambut_tersedia ? LAYERS : LAYERS_WITHOUT_PEAT;
+  // Layers that are on and available (a shared link may still ask for the disabled peat layer).
+  const activeLayers = useMemo(
+    () => filters.lapisan.filter((key) => !layerOptions.some((layer) => layer.key === key && layer.disabled)),
+    [filters.lapisan, layerOptions],
+  );
   // A shared link with `?peta=zoom/lat/lon` opens at that position (read once, on load).
   const [initialView] = useState(() => parseMapView(view));
   const desktop = useIsDesktop();
@@ -138,8 +148,8 @@ export function MapDashboard({ status }: { status: DataStatus }) {
   const tier = tierOf(zoom);
   const near = tier === "dekat";
 
-  const riskOn = filters.lapisan.includes("risiko");
-  const hotspotsOn = filters.lapisan.includes("hotspot");
+  const riskOn = activeLayers.includes("risiko");
+  const hotspotsOn = activeLayers.includes("hotspot");
   const playing = playRequested && riskOn;
 
   const end = status.tanggal_data;
@@ -327,9 +337,10 @@ export function MapDashboard({ status }: { status: DataStatus }) {
 
   // Summary values for the context --------------------------------------------------------
   const statsLoaded = provinceStats.data !== undefined && regencyStats.data !== undefined;
-  // Regencies ranked by risk within the context's province (or nationally).
+  // Regencies ranked by risk within the context's province (or nationally); regencies without a
+  // prediction have no score to rank.
   const riskCandidates = useMemo(
-    () => (regencyStats.data ?? []).filter((s) => !contextProvince || s.provinsi === contextProvince),
+    () => (regencyStats.data ?? []).filter((s) => hasPrediction(s) && (!contextProvince || s.provinsi === contextProvince)),
     [regencyStats.data, contextProvince],
   );
   const regencyContext = context && context.level !== "provinsi";
@@ -381,11 +392,13 @@ export function MapDashboard({ status }: { status: DataStatus }) {
         ? {
             label: "Rata-rata risiko",
             icon: Gauge,
-            value: !statsLoaded ? undefined : (contextStat?.rata_skor_risiko ?? 0),
+            value: !statsLoaded ? undefined : contextStat && hasPrediction(contextStat) ? contextStat.rata_skor_risiko : "–",
             format: (v: number) => formatDecimal(v),
-            hint: contextStat
+            hint: contextStat && hasPrediction(contextStat)
               ? `${getRiskLabel(getRiskLevel(contextStat.rata_skor_risiko))} · maks ${formatDecimal(contextStat.maks_skor_risiko)}`
-              : undefined,
+              : contextStat
+                ? NO_PREDICTION_LABEL
+                : undefined,
           }
         : {
             label: "Paling rawan",
@@ -393,7 +406,9 @@ export function MapDashboard({ status }: { status: DataStatus }) {
             value: !statsLoaded ? undefined : (mostAtRisk?.nama ?? "–"),
             hint: mostAtRisk
               ? `${formatDecimal(mostAtRisk.rata_skor_risiko)} · ${getRiskLabel(getRiskLevel(mostAtRisk.rata_skor_risiko))}`
-              : undefined,
+              : statsLoaded
+                ? NO_PREDICTION_LABEL
+                : undefined,
           },
       {
         label: "Hari tanpa hujan",
@@ -444,10 +459,10 @@ export function MapDashboard({ status }: { status: DataStatus }) {
     else if (hotspots.loading) statusItems.push({ kind: "loading", message: "Memuat hotspot…" });
     else if (hotspotCount === 0) statusItems.push({ kind: "empty", message: `Tidak ada hotspot di ${contextName} pada rentang ini` });
   }
-  if (filters.lapisan.includes("zona") && clusters.error) {
+  if (activeLayers.includes("zona") && clusters.error) {
     statusItems.push({ kind: "error", message: "Gagal memuat zona kebakaran.", onRetry: clusters.retry });
   }
-  if (filters.lapisan.includes("gambut") && !near) {
+  if (activeLayers.includes("gambut") && !near) {
     statusItems.push({ kind: "empty", message: "Perbesar peta untuk melihat lahan gambut" });
   }
 
@@ -507,7 +522,7 @@ export function MapDashboard({ status }: { status: DataStatus }) {
     retryHotspot,
   ]);
 
-  const visibleLayers = useMemo(() => filters.lapisan.filter((key) => LAYERS.some((layer) => layer.key === key)), [filters.lapisan]);
+  const visibleLayers = useMemo(() => activeLayers.filter((key) => LAYERS.some((layer) => layer.key === key)), [activeLayers]);
 
   // Hotspots and numbered groups on screen, read from the rendered (clustered) source.
   const hotspotCounts = useMapIdleValue(map, readHotspotCounts, sameHotspotCounts);
@@ -518,7 +533,9 @@ export function MapDashboard({ status }: { status: DataStatus }) {
     const view = viewport.bbox;
     const zeroLevels = (): Record<RiskLevel, number> => ({ rendah: 0, sedang: 0, tinggi: 0, sangat_tinggi: 0 });
     const risk = zeroLevels();
+    let unpredicted = 0;
     let peat = 0;
+    let peatUnknown = 0;
     if (near && gridData) {
       const size = gridData.ukuran_sel;
       const gridDayIndex = gridDay(gridData, targetDate);
@@ -526,19 +543,22 @@ export function MapDashboard({ status }: { status: DataStatus }) {
         if (!bboxIntersects([cell[1], cell[2], cell[1] + size, cell[2] + size], view)) continue;
         if (gridDayIndex >= 0) risk[getRiskLevel(cellScore(cell, gridDayIndex))]++;
         if (cell[3] === 1) peat++;
+        else if (cell[3] === null) peatUnknown++;
       }
     } else {
       const stats = tier === "provinsi" ? provinceStats.data : regencyStats.data;
       for (const s of stats ?? []) {
         const item = indexBySlug?.[s.slug];
-        if (item && bboxIntersects(item.bbox, view)) risk[getRiskLevel(s.rata_skor_risiko)]++;
+        if (!item || !bboxIntersects(item.bbox, view)) continue;
+        if (hasPrediction(s)) risk[getRiskLevel(s.rata_skor_risiko)]++;
+        else unpredicted++;
       }
     }
     const zones = Object.fromEntries(CLUSTER_STATUSES.map((s) => [s, 0])) as Record<(typeof CLUSTER_STATUSES)[number], number>;
     for (const f of clusters.data?.features ?? []) {
       if (f.geometry.coordinates[0].some((p) => pointInBBox(p, view))) zones[f.properties.status]++;
     }
-    return { risk, hotspots: hotspotCounts ?? undefined, zones, peat };
+    return { risk, unpredicted, hotspots: hotspotCounts ?? undefined, zones, peat, peatUnknown };
   }, [viewport, near, tier, gridData, targetDate, provinceStats.data, regencyStats.data, indexBySlug, hotspotCounts, clusters.data]);
 
   const legendProps: LegendProps = {
@@ -559,7 +579,7 @@ export function MapDashboard({ status }: { status: DataStatus }) {
       filters={filters}
       setFilters={setFilters}
       toggleLayer={toggleLayer}
-      layers={LAYERS}
+      layers={layerOptions}
       rangeHint={rangeHint}
       riskOpacity={riskOpacity}
       onRiskOpacityChange={setRiskOpacity}
@@ -578,6 +598,7 @@ export function MapDashboard({ status }: { status: DataStatus }) {
       </div>
       <TopRegions
         stats={regencyStats.data ? riskCandidates : undefined}
+        emptyDescription={contextProvince ? NO_PREDICTION_MESSAGE : undefined}
         highlight={regencyContext ? context.slug : null}
         error={regencyStats.error}
         onRetry={regencyStats.retry}
@@ -605,7 +626,7 @@ export function MapDashboard({ status }: { status: DataStatus }) {
           label="Peta hotspot dan prediksi risiko karhutla Indonesia"
           initialView={initialView}
           tier={tier}
-          layers={filters.lapisan}
+          layers={activeLayers}
           regencies={regenciesWanted}
           regenciesLoaded={regenciesWanted && !regencies.loading && !regencies.error}
           provinceStats={provinceStatsBySlug}

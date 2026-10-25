@@ -10,6 +10,20 @@ export const RISK_THRESHOLDS: Record<RiskLevel, number> = {
 
 export const RISK_LEVEL_ORDER: RiskLevel[] = ["rendah", "sedang", "tinggi", "sangat_tinggi"];
 
+/**
+ * The pipeline only predicts some provinces; every other region comes with 0 grid cells and a
+ * score of 0, which means "not computed", not low risk. Use this before reading a region's score.
+ */
+export function hasPrediction(region: { jumlah_sel: number } | null | undefined): boolean {
+  return region != null && region.jumlah_sel > 0;
+}
+
+export const NO_PREDICTION_LABEL = "Tidak diprediksi";
+/** Shown on the map (tooltip) for a region without a prediction. */
+export const NO_PREDICTION_TOOLTIP = "Tidak ada prediksi untuk wilayah ini";
+/** Shown on region pages and summaries in place of the risk score. */
+export const NO_PREDICTION_MESSAGE = "Prediksi risiko belum tersedia untuk wilayah ini";
+
 export function getRiskLevel(score: number): RiskLevel {
   if (score >= RISK_THRESHOLDS.sangat_tinggi) return "sangat_tinggi";
   if (score >= RISK_THRESHOLDS.tinggi) return "tinggi";

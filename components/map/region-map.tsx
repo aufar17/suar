@@ -24,6 +24,8 @@ export interface RegionMapProps {
   grid?: RiskGrid;
   targetDate: string;
   stats?: Record<string, RegionStat>;
+  /** The region has a risk prediction (otherwise no risk fill). */
+  predicted: boolean;
   regionNames: Record<string, string>;
   onReady?: (map: MaplibreMap) => void;
 }
@@ -39,6 +41,7 @@ export default function RegionMap({
   grid,
   targetDate,
   stats,
+  predicted,
   regionNames,
   onReady,
 }: RegionMapProps) {
@@ -50,7 +53,7 @@ export default function RegionMap({
           level="kabupaten"
           data={GEO_FILES.kabupaten}
           provinsi={provinsi}
-          choropleth={kind === "provinsi"}
+          choropleth={kind === "provinsi" && predicted}
           stats={stats}
           interactive={kind === "provinsi"}
           parentNames={regionNames}

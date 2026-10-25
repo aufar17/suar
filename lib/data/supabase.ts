@@ -143,7 +143,7 @@ export const supabaseDataSource: DataSource = {
   async getDataStatus() {
     const { data, error } = await supabase()
       .from("data_status")
-      .select("terakhir_diperbarui, tanggal_data, prediksi_mulai, prediksi_sampai")
+      .select("terakhir_diperbarui, tanggal_data, prediksi_mulai, prediksi_sampai, gambut_tersedia")
       .single();
     if (error) throw new Error(`Gagal membaca view data_status: ${error.message}`);
     return parse(dataStatusSchema, { ...data, sumber: "supabase" }, "view data_status");

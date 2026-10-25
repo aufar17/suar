@@ -2,6 +2,7 @@ import type { ExpressionSpecification } from "maplibre-gl";
 import type { Theme } from "@/components/ui/theme";
 import { getRiskColor, RISK_LEVEL_ORDER } from "@/lib/risk";
 import type { RiskLevel } from "@/types";
+import { MAP_COLORS } from "./colors";
 
 // Small builders for style expressions whose length is only known at runtime.
 
@@ -31,21 +32,30 @@ export function levelIndex(level: RiskLevel): number {
 /** The feature's risk level from feature-state, or -1 while it has none. */
 export const STATE_LEVEL: ExpressionSpecification = ["coalesce", ["feature-state", "level"], -1];
 
+/** Regions without a risk prediction (feature-state `tanpa_prediksi`, set by region-layers.tsx). */
+export const UNPREDICTED: ExpressionSpecification = ["boolean", ["feature-state", "tanpa_prediksi"], false];
+
 /**
  * Fill color from the feature-state level. "Rendah" stays unfilled so most of the land keeps
- * the basemap visible; with `onlyLevel` every other level is unfilled too.
+ * the basemap visible, and regions without a prediction get a neutral wash instead of a level
+ * color; with `onlyLevel` every other level (and the neutral wash) is unfilled too.
  */
 export function riskFillColor(theme: Theme, onlyLevel: RiskLevel | null): ExpressionSpecification {
   const color: ExpressionSpecification = [
-    "match",
-    STATE_LEVEL,
-    levelIndex("sedang"),
-    getRiskColor("sedang", theme),
-    levelIndex("tinggi"),
-    getRiskColor("tinggi", theme),
-    levelIndex("sangat_tinggi"),
-    getRiskColor("sangat_tinggi", theme),
-    TRANSPARENT,
+    "case",
+    UNPREDICTED,
+    MAP_COLORS[theme].unpredicted,
+    [
+      "match",
+      STATE_LEVEL,
+      levelIndex("sedang"),
+      getRiskColor("sedang", theme),
+      levelIndex("tinggi"),
+      getRiskColor("tinggi", theme),
+      levelIndex("sangat_tinggi"),
+      getRiskColor("sangat_tinggi", theme),
+      TRANSPARENT,
+    ],
   ];
   return onlyLevel ? ["case", ["==", STATE_LEVEL, levelIndex(onlyLevel)], color, TRANSPARENT] : color;
 }

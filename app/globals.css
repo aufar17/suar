@@ -61,6 +61,8 @@
   --map-cluster: #18181b;
   --map-boundary: #3f3f46;
   --map-gambut: #8a6a2f;
+  /* Regions without a risk prediction: a neutral wash (drawn at 40% inside the choropleth). */
+  --map-unpredicted: #71717a;
   --map-selection: #e8590c;
   --map-selection-halo: #ffffff;
 
@@ -124,6 +126,7 @@
   --map-cluster: #fafafa;
   --map-boundary: #a1a1aa;
   --map-gambut: #c9b67a;
+  --map-unpredicted: #a1a1aa;
   --map-selection: #f97a3c;
   --map-selection-halo: #09090b;
 

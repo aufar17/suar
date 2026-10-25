@@ -1,11 +1,11 @@
 import { ArrowUpRight, Flame } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { RiskBadge } from "@/components/ui/risk-badge";
+import { NoPredictionBadge, RiskBadge } from "@/components/ui/risk-badge";
 import { getDataStatus, getRegionStats } from "@/lib/data";
 import { addDaysIso, formatDayShort, formatDecimal, formatInteger } from "@/lib/format";
 import { regionHref } from "@/lib/labels";
-import { getRiskLevel } from "@/lib/risk";
+import { getRiskLevel, hasPrediction } from "@/lib/risk";
 import { cn } from "@/lib/utils";
 import type { RegionStat, RiskLevel } from "@/types";
 
@@ -26,6 +26,7 @@ const BAR: Record<RiskLevel, string> = {
 const TOP_REGENCIES = 12;
 
 function RegionCard({ stat, eyebrow }: { stat: RegionStat; eyebrow: string }) {
+  const predicted = hasPrediction(stat);
   const level = getRiskLevel(stat.rata_skor_risiko);
   return (
     <Link
@@ -48,16 +49,22 @@ function RegionCard({ stat, eyebrow }: { stat: RegionStat; eyebrow: string }) {
             <Flame aria-hidden="true" className="size-3.5" />
             <span className="font-mono text-foreground">{formatInteger(stat.jumlah_hotspot)}</span> hotspot
           </span>
-          <span className="flex items-center gap-2">
-            <span className="font-mono">{formatDecimal(stat.rata_skor_risiko)}</span>
-            <RiskBadge level={level} size="sm" />
-          </span>
+          {predicted ? (
+            <span className="flex items-center gap-2">
+              <span className="font-mono">{formatDecimal(stat.rata_skor_risiko)}</span>
+              <RiskBadge level={level} size="sm" />
+            </span>
+          ) : (
+            <NoPredictionBadge size="sm" />
+          )}
         </div>
         <span aria-hidden="true" className="block h-1.5 overflow-hidden rounded-full bg-muted">
-          <span
-            className={cn("block h-full rounded-full", BAR[level])}
-            style={{ width: `${Math.max(2, stat.rata_skor_risiko * 100)}%` }}
-          />
+          {predicted ? (
+            <span
+              className={cn("block h-full rounded-full", BAR[level])}
+              style={{ width: `${Math.max(2, stat.rata_skor_risiko * 100)}%` }}
+            />
+          ) : null}
         </span>
       </div>
     </Link>
@@ -72,8 +79,13 @@ export default async function WilayahIndexPage() {
     getRegionStats({ ...window30, level: "kabupaten" }),
   ]);
   const provinceNames = new Map(provinces.map((p) => [p.slug, p.nama]));
-  // Both lists come sorted by mean risk, so they answer "where should I look?".
-  const riskiest = regencies.slice(0, TOP_REGENCIES);
+  // Both lists come sorted by mean risk, so they answer "where should I look?". Regions without
+  // a prediction have no score: they are left out of the riskiest and listed after the others.
+  const riskiest = regencies.filter((s) => hasPrediction(s)).slice(0, TOP_REGENCIES);
+  const provinceList = [
+    ...provinces.filter((s) => hasPrediction(s)),
+    ...provinces.filter((s) => !hasPrediction(s)).sort((a, b) => a.nama.localeCompare(b.nama, "id")),
+  ];
 
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-col gap-10 px-4 py-6 sm:py-8 lg:px-8 lg:py-10">
@@ -83,8 +95,9 @@ export default async function WilayahIndexPage() {
           {formatInteger(provinces.length)} provinsi, {formatInteger(regencies.length)} kabupaten/kota
         </h1>
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-          Diurutkan dari rata-rata risiko tertinggi untuk {formatDayShort(status.prediksi_mulai)}. Jumlah hotspot dihitung
-          30 hari terakhir. Gunakan pencarian (Ctrl/⌘ K) untuk membuka kabupaten/kota mana pun.
+          Diurutkan dari rata-rata risiko tertinggi untuk {formatDayShort(status.prediksi_mulai)}; provinsi tanpa prediksi
+          berada di akhir. Jumlah hotspot dihitung 30 hari terakhir. Gunakan pencarian (Ctrl/⌘ K) untuk membuka
+          kabupaten/kota mana pun.
         </p>
       </header>
 
@@ -109,7 +122,7 @@ export default async function WilayahIndexPage() {
           Semua provinsi
         </h2>
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {provinces.map((stat) => (
+          {provinceList.map((stat) => (
             <li key={stat.slug}>
               <RegionCard stat={stat} eyebrow="Provinsi" />
             </li>

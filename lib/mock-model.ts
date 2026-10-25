@@ -11,7 +11,8 @@ export interface RiskInputs {
   dry: number;
   /** Forecast relative humidity (%). */
   humidity: number;
-  gambut: boolean;
+  /** `null` = no peat data for the cell: the feature contributes nothing. */
+  gambut: boolean | null;
   /** Hotspots within 10 km during the 7 days before the prediction. */
   hotspots: number;
   ndvi: number;
@@ -28,7 +29,7 @@ export function contributionValues(x: RiskInputs): number[] {
   return [
     0.09 * (x.dry - 10),
     -0.05 * (x.humidity - 65),
-    x.gambut ? 1.1 : -0.35,
+    x.gambut === null ? 0 : x.gambut ? 1.1 : -0.35,
     (x.hotspots > 0 ? 0.55 * Math.log(1 + x.hotspots) - 0.2 : -0.3) * hsWeight,
     -2.5 * (x.ndvi - 0.5),
   ];
@@ -51,7 +52,7 @@ export function riskContributions(x: RiskInputs): RiskFactor[] {
     {
       fitur: "lahan_gambut",
       kontribusi: peat,
-      label: x.gambut ? "Lahan gambut" : "Tanah mineral, bukan gambut",
+      label: x.gambut === null ? "Data gambut belum tersedia" : x.gambut ? "Lahan gambut" : "Tanah mineral, bukan gambut",
     },
     {
       fitur: "hotspot_sekitar",

@@ -14,6 +14,8 @@ export interface LayerOption {
   label: string;
   description: string;
   icon: ReactNode;
+  /** Listed but cannot be switched on (e.g. no data yet); `description` says why. */
+  disabled?: boolean;
 }
 
 export const RANGE_LABELS: Record<RangeDays, string> = { 1: "24 jam", 3: "3 hari", 7: "7 hari" };
@@ -104,13 +106,16 @@ export function LayerToggles({
       <legend className="mb-1 text-xs font-medium text-muted-foreground">Lapisan peta</legend>
       <ul className="-mx-2 flex flex-col">
         {layers.map((layer) => {
-          const on = active.includes(layer.key);
+          const on = active.includes(layer.key) && !layer.disabled;
           const id = `${baseId}-${layer.key}`;
           return (
             <li key={layer.key}>
               <label
                 htmlFor={id}
-                className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 transition-colors duration-150 hover:bg-muted/70"
+                className={cn(
+                  "flex min-h-11 items-center gap-3 rounded-lg px-2 py-1.5 transition-colors duration-150",
+                  layer.disabled ? "cursor-not-allowed" : "cursor-pointer hover:bg-muted/70",
+                )}
               >
                 <span
                   aria-hidden="true"
@@ -122,10 +127,20 @@ export function LayerToggles({
                   {layer.icon}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-sm leading-tight">{layer.label}</span>
-                  <span className="block truncate text-xs text-muted-foreground">{layer.description}</span>
+                  <span className={cn("block text-sm leading-tight", layer.disabled && "text-muted-foreground")}>
+                    {layer.label}
+                  </span>
+                  <span id={`${id}-keterangan`} className="block truncate text-xs text-muted-foreground">
+                    {layer.description}
+                  </span>
                 </span>
-                <Switch id={id} checked={on} onCheckedChange={(visible) => onToggle(layer.key, visible)} />
+                <Switch
+                  id={id}
+                  checked={on}
+                  disabled={layer.disabled}
+                  aria-describedby={layer.disabled ? `${id}-keterangan` : undefined}
+                  onCheckedChange={(visible) => onToggle(layer.key, visible)}
+                />
               </label>
               {layer.key === "risiko" && on && riskOpacity ? (
                 <OpacityControl value={riskOpacity.value} onChange={riskOpacity.onChange} />

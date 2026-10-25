@@ -1,4 +1,16 @@
-import { CalendarClock, CloudRain, Droplets, Flame, FlameKindling, Gauge, Sprout, Sun, Thermometer, Wind } from "lucide-react";
+import {
+  CalendarClock,
+  CloudRain,
+  Droplets,
+  Flame,
+  FlameKindling,
+  Gauge,
+  MapPinOff,
+  Sprout,
+  Sun,
+  Thermometer,
+  Wind,
+} from "lucide-react";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { MonthlyBarChart } from "@/components/charts/lazy";
@@ -10,7 +22,7 @@ import { RegionMapPanel } from "@/components/map/region-map-panel";
 import { PredictionNote, ScoreGauge } from "@/components/panels/risk-detail";
 import { StatTile } from "@/components/panels/stat-tile";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
-import { RiskBadge } from "@/components/ui/risk-badge";
+import { NoPredictionBadge, RiskBadge } from "@/components/ui/risk-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/state";
 import {
@@ -33,7 +45,7 @@ import {
   shiftMonth,
 } from "@/lib/format";
 import { REGION_LEVEL_LABELS, regionDisplayName, regionHref } from "@/lib/labels";
-import { getRiskLevel } from "@/lib/risk";
+import { getRiskLevel, hasPrediction, NO_PREDICTION_MESSAGE } from "@/lib/risk";
 
 function Card({ children, labelledBy, className }: { children: ReactNode; labelledBy: string; className?: string }) {
   return (
@@ -84,6 +96,8 @@ export async function RegionOverview({ slug }: { slug: string }) {
   const days30 = Array.from({ length: 30 }, (_, i) => addDaysIso(start30, i));
   const perDay = days30.map((day) => hotspots30.features.filter((f) => f.properties.waktu_deteksi.startsWith(day)).length);
   const hotspotsToday = perDay[perDay.length - 1];
+  // Regions outside the predicted provinces have no grid cells: their score of 0 means "not computed".
+  const predicted = hasPrediction(dailyStats[0].find((s) => s.slug === slug));
   const forecast = targets.map((date, i) => ({
     date,
     score: dailyStats[i].find((s) => s.slug === slug)?.rata_skor_risiko ?? 0,
@@ -121,7 +135,11 @@ export async function RegionOverview({ slug }: { slug: string }) {
           </p>
           <h1 className="mt-1 text-3xl font-semibold tracking-tight text-balance sm:text-4xl">{name}</h1>
           <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
-            <RiskBadge level={tomorrowLevel} size="lg" prefix="Risiko besok:" />
+            {predicted ? (
+              <RiskBadge level={tomorrowLevel} size="lg" prefix="Risiko besok:" />
+            ) : (
+              <NoPredictionBadge size="lg" label={NO_PREDICTION_MESSAGE} className="whitespace-normal" />
+            )}
             <p className="text-sm text-muted-foreground">Data sampai {formatDate(today)}</p>
           </div>
         </div>
@@ -145,30 +163,40 @@ export async function RegionOverview({ slug }: { slug: string }) {
           }
           figure={<Sparkline values={perDay} area />}
         />
-        <StatTile
-          label="Rata-rata skor risiko besok"
-          icon={Gauge}
-          value={formatDecimal(tomorrow.score)}
-          hint={`${formatDayShort(tomorrow.date)} · puncak 7 hari ${formatDecimal(peakDay.score)} (${formatDayShort(peakDay.date)})`}
-          figure={<ScoreGauge score={tomorrow.score} level={tomorrowLevel} />}
-        />
+        {predicted ? (
+          <StatTile
+            label="Rata-rata skor risiko besok"
+            icon={Gauge}
+            value={formatDecimal(tomorrow.score)}
+            hint={`${formatDayShort(tomorrow.date)} · puncak 7 hari ${formatDecimal(peakDay.score)} (${formatDayShort(peakDay.date)})`}
+            figure={<ScoreGauge score={tomorrow.score} level={tomorrowLevel} />}
+          />
+        ) : (
+          <StatTile label="Rata-rata skor risiko besok" icon={Gauge} value="–" hint={`${NO_PREDICTION_MESSAGE}.`} />
+        )}
         <StatTile
           label="Area gambut"
           icon={Sprout}
-          value={formatPercent(region.persen_gambut, 1)}
-          hint={`${formatInteger(region.jumlah_sel)} kotak grid · ±${formatInteger(region.luas_km2)} km²`}
+          value={region.persen_gambut === null ? "–" : formatPercent(region.persen_gambut, 1)}
+          hint={
+            region.persen_gambut === null
+              ? `Data gambut belum tersedia · ±${formatInteger(region.luas_km2)} km²`
+              : `${formatInteger(region.jumlah_sel)} kotak grid · ±${formatInteger(region.luas_km2)} km²`
+          }
           className="sm:col-span-2 lg:col-span-1"
           figure={
-            <div
-              role="meter"
-              aria-label="Persentase area gambut"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={region.persen_gambut}
-              className="h-2.5 overflow-hidden rounded-full bg-muted"
-            >
-              <div className="h-full rounded-full bg-[var(--map-gambut)]" style={{ width: `${region.persen_gambut}%` }} />
-            </div>
+            region.persen_gambut === null ? undefined : (
+              <div
+                role="meter"
+                aria-label="Persentase area gambut"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={region.persen_gambut}
+                className="h-2.5 overflow-hidden rounded-full bg-muted"
+              >
+                <div className="h-full rounded-full bg-[var(--map-gambut)]" style={{ width: `${region.persen_gambut}%` }} />
+              </div>
+            )
           }
         />
       </div>
@@ -184,6 +212,7 @@ export async function RegionOverview({ slug }: { slug: string }) {
             hotspotStart={addDaysIso(today, -6)}
             hotspotEnd={today}
             targetDate={tomorrow.date}
+            predicted={predicted}
           />
         </section>
         <Card labelledBy="cuaca">
@@ -240,8 +269,18 @@ export async function RegionOverview({ slug }: { slug: string }) {
             title="Prediksi risiko 7 hari"
             description="Rata-rata skor risiko seluruh kotak grid di wilayah ini."
           />
-          <RiskForecastChart days={forecast} />
-          <PredictionNote className="mt-3" />
+          {predicted ? (
+            <>
+              <RiskForecastChart days={forecast} />
+              <PredictionNote className="mt-3" />
+            </>
+          ) : (
+            <EmptyState
+              icon={MapPinOff}
+              title={NO_PREDICTION_MESSAGE}
+              description="Prediksi saat ini hanya dibuat untuk provinsi rawan karhutla. Data hotspot dan cuaca tetap ditampilkan."
+            />
+          )}
         </Card>
         <Card labelledBy="tren">
           <CardTitle

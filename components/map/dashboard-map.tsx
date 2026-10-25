@@ -99,6 +99,7 @@ export default memo(function DashboardMap({
   const riskOn = layers.includes("risiko");
   const boundsOn = layers.includes("batas");
   const highlightLevel = riskOn && highlight?.kind === "risiko" ? highlight.level : null;
+  const highlightUnpredicted = riskOn && highlight?.kind === "tanpa_prediksi";
   const boundaryEmphasis = (level: "provinsi" | "kabupaten") => highlight?.kind === "batas" && highlight.tier === level;
   // Provinces keep their fill until the regencies have loaded.
   const provinceZoom: [number, number] = regenciesLoaded ? [0, REGENCY_MIN_ZOOM] : [0, 24];
@@ -110,6 +111,7 @@ export default memo(function DashboardMap({
     opacity: riskOpacity / DEFAULT_RISK_OPACITY,
     onlyLevel: riskOn ? onlyLevel : null,
     highlightLevel: tier === level ? highlightLevel : null,
+    highlightUnpredicted: tier === level && highlightUnpredicted,
     // Regions stay hoverable and clickable whenever the risk or boundary layer is on.
     interactive: tier === level && (riskOn || boundsOn),
     outlined: !boundsOn,
@@ -146,6 +148,9 @@ export default memo(function DashboardMap({
               zoom={regencyZoom}
               stats={regencyStats}
               {...regionLayer("kabupaten")}
+              // The grid has no cells outside the predicted regions: they keep their neutral fill.
+              keepUnpredicted
+              unpredictedHover={tier === "dekat" && riskOn}
               boundary={boundsOn ? { weight: 0.7, zoom: [REGENCY_MIN_ZOOM, 24], emphasis: boundaryEmphasis("kabupaten") } : null}
               nameOnHover={tier === "dekat" && boundsOn && !riskOn}
             />

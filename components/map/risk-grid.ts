@@ -6,7 +6,8 @@ import { levelIndex } from "./expressions";
 
 export interface GridCellProps {
   cell_id: string;
-  is_gambut: boolean;
+  /** `null` = no peat data (MapLibre may drop the property, so read it as `== null`). */
+  is_gambut: boolean | null;
   kabupaten: string;
 }
 
@@ -38,7 +39,11 @@ export function gridFeatures(grid: RiskGrid): GridFeatureCollection {
     features: grid.sel.map((cell) => ({
       type: "Feature",
       geometry: { type: "Polygon", coordinates: [cellRing(cell, grid.ukuran_sel)] },
-      properties: { cell_id: cell[0], is_gambut: cell[3] === 1, kabupaten: grid.kabupaten[cell[4]] ?? "" },
+      properties: {
+        cell_id: cell[0],
+        is_gambut: cell[3] === null ? null : cell[3] === 1,
+        kabupaten: grid.kabupaten[cell[4]] ?? "",
+      },
     })),
   };
 }

@@ -5,10 +5,10 @@ import { useMemo } from "react";
 import { Layer, Source } from "react-map-gl/maplibre";
 import { formatDecimal, formatInteger } from "@/lib/format";
 import { regionDisplayName } from "@/lib/labels";
-import { getRiskColor, getRiskLabel, getRiskLevel } from "@/lib/risk";
+import { getRiskColor, getRiskLabel, getRiskLevel, hasPrediction, NO_PREDICTION_TOOLTIP } from "@/lib/risk";
 import type { BoundaryTier, RegionLevel, RegionStat, RiskLevel } from "@/types";
 import { slotId } from "./basemap";
-import { hasStateLevel, HOVER, levelIndex, riskFillColor, zoomRange } from "./expressions";
+import { hasStateLevel, HOVER, levelIndex, riskFillColor, UNPREDICTED, zoomRange } from "./expressions";
 import { escapeHtml, swatchHtml, tooltipHtml } from "./hover";
 import { useLayerInteraction } from "./interactions";
 import { useMapStyle } from "./map-view";
@@ -34,6 +34,14 @@ export interface RegionLayersProps {
   onlyLevel?: RiskLevel | null;
   /** Legend hover: outline regions of this level. */
   highlightLevel?: RiskLevel | null;
+  /** Legend hover: outline regions without a prediction. */
+  highlightUnpredicted?: boolean;
+  /**
+   * Keep the neutral fill of regions without a prediction above `zoom`, where the risk grid
+   * takes over but has no cells for them; `unpredictedHover` adds their tooltip there.
+   */
+  keepUnpredicted?: boolean;
+  unpredictedHover?: boolean;
   /** Thin outlines with the fill (off when the boundary line is drawn). */
   outlined?: boolean;
   /** Boundary lines ("Batas wilayah" layer) in a zoom range; `emphasis` = legend hover. */
@@ -51,6 +59,17 @@ export interface RegionLayersProps {
   /** Last tooltip line, e.g. "Klik untuk memperbesar". */
   hint?: string;
   onSelect?: (slug: string) => void;
+}
+
+/** Choropleth opacity inside the zoom range; above it only regions without a prediction stay filled (`keepUnpredicted`). */
+function fillOpacity(
+  value: number,
+  [min, max]: [number, number],
+  keepUnpredicted: boolean,
+): number | ExpressionSpecification {
+  if (!keepUnpredicted || max >= 24) return zoomRange(value, [min, max]);
+  const above: ExpressionSpecification = ["case", UNPREDICTED, value, 0];
+  return min <= 0 ? ["step", ["zoom"], value, max, above] : ["step", ["zoom"], 0, min, value, max, above];
 }
 
 interface RegionFeatureProps {
@@ -76,6 +95,9 @@ export function RegionLayers({
   opacity = 1,
   onlyLevel = null,
   highlightLevel = null,
+  highlightUnpredicted = false,
+  keepUnpredicted = false,
+  unpredictedHover = false,
   outlined = true,
   boundary = null,
   emphasize = null,
@@ -93,28 +115,43 @@ export function RegionLayers({
 
   const states = useMemo((): FeatureStates | null => {
     if (!stats) return null;
-    return new Map(Object.values(stats).map((stat) => [stat.slug, { level: levelIndex(getRiskLevel(stat.rata_skor_risiko)) }]));
+    return new Map(
+      Object.values(stats).map((stat) => [
+        stat.slug,
+        hasPrediction(stat)
+          ? { level: levelIndex(getRiskLevel(stat.rata_skor_risiko)), tanpa_prediksi: false }
+          : { level: -1, tanpa_prediksi: true },
+      ]),
+    );
   }, [stats]);
   useFeatureStates(source, states);
 
   const fillColor = riskFillColor(theme, onlyLevel);
-  const isHighlighted = hasStateLevel(highlightLevel);
+  const isHighlighted = highlightUnpredicted ? UNPREDICTED : hasStateLevel(highlightLevel);
+  // Above the zoom range, only regions without a prediction react (the grid handles the rest).
+  const unpredictedOnly = !interactive && !nameOnHover && keepUnpredicted && unpredictedHover;
   const isStrong: ExpressionSpecification = ["==", ["get", "slug"], emphasize ?? ""];
   const focusFilter: FilterSpecification = ["==", ["get", "slug"], focus ?? ""];
 
   useLayerInteraction(
     fillLayer,
-    interactive || nameOnHover
+    interactive || nameOnHover || unpredictedOnly
       ? {
-          hover: true,
+          hover: !unpredictedOnly,
           compact: nameOnHover,
           tooltip: (feature) => {
             const p = feature.properties as RegionFeatureProps;
             if (nameOnHover) return escapeHtml(p.nama);
             const stat = stats?.[p.slug];
-            const risk = stat ? getRiskLevel(stat.rata_skor_risiko) : null;
             const rows: [string, string][] = [];
             if (p.provinsi) rows.push(["Provinsi", parentNames?.[p.provinsi] ?? p.provinsi]);
+            if (stat && !hasPrediction(stat)) {
+              rows.push(["Hotspot", formatInteger(stat.jumlah_hotspot)]);
+              const title = `${swatchHtml(colors.unpredicted)}${escapeHtml(regionDisplayName(p))}`;
+              return tooltipHtml(title, rows, unpredictedOnly ? undefined : hint, NO_PREDICTION_TOOLTIP);
+            }
+            if (unpredictedOnly) return null;
+            const risk = stat ? getRiskLevel(stat.rata_skor_risiko) : null;
             if (stat && risk) {
               rows.push(
                 ["Hotspot", formatInteger(stat.jumlah_hotspot)],
@@ -126,7 +163,9 @@ export function RegionLayers({
             return tooltipHtml(title, rows, hint);
           },
           onClick:
-            onSelect && !nameOnHover ? (feature) => onSelect((feature.properties as RegionFeatureProps).slug) : undefined,
+            onSelect && !nameOnHover && !unpredictedOnly
+              ? (feature) => onSelect((feature.properties as RegionFeatureProps).slug)
+              : undefined,
         }
       : null,
   );
@@ -139,7 +178,10 @@ export function RegionLayers({
         type="fill"
         beforeId={slotId("wilayah")}
         {...withFilter}
-        paint={{ "fill-color": fillColor, "fill-opacity": choropleth ? zoomRange(CHOROPLETH_FILL * opacity, zoom) : 0 }}
+        paint={{
+          "fill-color": fillColor,
+          "fill-opacity": choropleth ? fillOpacity(CHOROPLETH_FILL * opacity, zoom, keepUnpredicted) : 0,
+        }}
       />
       <Layer
         id={`${source}-garis-isi`}

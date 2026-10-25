@@ -125,7 +125,21 @@ export function CellDetail({
   const p = feature.properties;
   const level = p.level_risiko;
 
-  const tiles: InfoTile[] = [{ icon: Sprout, label: "Jenis lahan", value: p.is_gambut ? "Gambut" : "Tanah mineral" }];
+  const tiles: InfoTile[] = [
+    {
+      icon: Sprout,
+      label: "Jenis lahan",
+      value:
+        p.is_gambut === null ? (
+          // Wraps instead of being truncated: the whole sentence matters here.
+          <span className="block whitespace-normal">Data gambut belum tersedia</span>
+        ) : p.is_gambut ? (
+          "Gambut"
+        ) : (
+          "Tanah mineral"
+        ),
+    },
+  ];
   if (weather) {
     tiles.push(
       { icon: Sun, label: "Hari tanpa hujan", value: `${formatInteger(weather.hari_tanpa_hujan)} hari`, mono: true },

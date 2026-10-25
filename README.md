@@ -51,11 +51,13 @@ Untuk menggeser tanggalnya:
 MOCK_END_DATE=2026-11-05 pnpm mock:generate
 ```
 
-Generator memakai batas wilayah asli dari `pnpm geo:build` (jalankan sekali dulu). Isinya untuk seluruh Indonesia:
-±76.000 kotak grid 5 km di daratan (±9% gambut, terkonsentrasi di Riau, Jambi, Sumatera Selatan, Kalimantan, dan Papua
-bagian selatan), ±190.000 hotspot 24 bulan yang semuanya jatuh di daratan (terbanyak di provinsi rawan, puncak
-Juli–Oktober), zona kebakaran hari terakhir, prediksi risiko 7 hari untuk setiap kotak, dan cuaca terbaru per
-kabupaten/kota. Total ±13 MB. Data besar disimpan ringkas (lihat `types/mock.ts`) dan diubah ke GeoJSON oleh
+Generator memakai batas wilayah asli dari `pnpm geo:build` (jalankan sekali dulu). Seperti pipeline asli, hotspot dan
+cuaca mencakup seluruh Indonesia, tetapi kotak grid dan prediksi hanya untuk 7 provinsi rawan karhutla (Riau, Jambi,
+Sumatera Selatan, Kalimantan Barat, Tengah, Selatan, dan Timur); wilayah lain punya 0 kotak dan tampil "Tidak
+diprediksi". Isinya: ±28.000 kotak grid 5 km (Kalimantan Selatan dan Timur tanpa data gambut, `is_gambut` null),
+±190.000 hotspot 24 bulan yang semuanya jatuh di daratan (VIIRS S-NPP, NOAA-20, NOAA-21, dan MODIS; terbanyak di
+provinsi rawan, puncak Juli–Oktober), zona kebakaran hari terakhir, prediksi risiko 7 hari untuk setiap kotak, dan cuaca
+terbaru per kabupaten/kota. Dengan `MOCK_TANPA_GAMBUT=1` semua kotak dianggap belum punya data gambut. Total ±13 MB. Data besar disimpan ringkas (lihat `types/mock.ts`) dan diubah ke GeoJSON oleh
 `lib/data/mock.ts`; faktor SHAP setiap kotak dihitung ulang dari input model mock (`lib/mock-model.ts`).
 
 ## Variabel lingkungan
