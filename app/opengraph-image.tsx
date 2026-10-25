@@ -1,3 +1,6 @@
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+
 import { ImageResponse } from "next/og";
 
 export const alt = "Suar – Pemantauan & Prediksi Karhutla Indonesia";
@@ -6,7 +9,15 @@ export const contentType = "image/png";
 
 const RISK = ["#F3D27A", "#E98A3D", "#9E2F1C"];
 
-export default function OpenGraphImage() {
+// Cached so the image stays prerendered at build time instead of reading the file per request.
+async function loadLogo() {
+  "use cache";
+  const logo = await readFile(join(process.cwd(), "public/logo.png"));
+  return `data:image/png;base64,${logo.toString("base64")}`;
+}
+
+export default async function OpenGraphImage() {
+  const logoSrc = await loadLogo();
   // A stylised risk grid next to the title.
   const cells = Array.from({ length: 48 }, (_, i) => {
     const v = (Math.sin(i * 1.7) + Math.cos(i * 0.9) + 2) / 4;
@@ -29,19 +40,8 @@ export default function OpenGraphImage() {
       >
         <div style={{ display: "flex", flexDirection: "column", maxWidth: 620 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-            <div
-              style={{
-                width: 72,
-                height: 72,
-                borderRadius: 18,
-                background: "#1F3B36",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <div style={{ width: 28, height: 36, borderRadius: "50% 50% 45% 45%", background: "#C2521F" }} />
-            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element -- ImageResponse renders plain <img> only */}
+            <img src={logoSrc} alt="" width={88} height={88} />
             <div style={{ fontSize: 64, fontWeight: 700 }}>suar</div>
           </div>
           <div style={{ fontSize: 40, fontWeight: 600, marginTop: 32, lineHeight: 1.2 }}>

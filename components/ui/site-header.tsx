@@ -19,12 +19,18 @@ export async function SiteHeader() {
         >
           <LogoMark className="size-7" />
           <span className="flex items-baseline gap-2">
-            <span className="text-[15px] font-semibold tracking-tight">suar</span>
-            <span className="hidden text-xs text-muted-foreground xl:inline">Karhutla Indonesia</span>
+            <span className="text-[15px] font-semibold tracking-tight">
+              Suar
+            </span>
+            <span className="hidden text-xs text-muted-foreground xl:inline">
+              Karhutla Indonesia
+            </span>
           </span>
         </Link>
-
-        <span aria-hidden="true" className="mx-2 hidden h-5 w-px bg-border md:block" />
+        <span
+          aria-hidden="true"
+          className="mx-2 hidden h-5 w-px bg-border md:block"
+        />
         <NavLinks className="hidden md:block" />
 
         <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
