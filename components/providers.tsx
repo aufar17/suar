@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
-export const THEME_STORAGE_KEY = "siapi-theme";
+export const THEME_STORAGE_KEY = "suar-theme";
 
 /** App-wide client providers: theme, tooltips, toasts, and motion preferences. */
 export function Providers({ children }: { children: ReactNode }) {

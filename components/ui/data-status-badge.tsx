@@ -49,7 +49,7 @@ export function DataStatusBadge({
       </TooltipTrigger>
       <TooltipContent className="max-w-64 text-pretty">
         Terakhir diperbarui {formatDateTime(status.terakhir_diperbarui)}.{" "}
-        {mock ? "Angka di dashboard ini masih data tiruan selama pengembangan." : "Data dari pipeline SiAPI."}
+        {mock ? "Angka di dashboard ini masih data tiruan selama pengembangan." : "Data dari pipeline Suar."}
       </TooltipContent>
     </Tooltip>
   );

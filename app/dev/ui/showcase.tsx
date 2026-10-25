@@ -99,7 +99,7 @@ export function UiShowcase() {
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="font-mono text-xs text-muted-foreground">/dev/ui · internal</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight">Design system SiAPI</h1>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight">Design system Suar</h1>
           <p className="mt-2 max-w-xl text-muted-foreground">
             Token warna, tipografi, dan komponen dasar. Halaman ini tidak tampil di navigasi.
           </p>
@@ -309,7 +309,7 @@ export function UiShowcase() {
               <div className="h-24" />
             </DrawerContent>
           </Drawer>
-          <Button variant="outline" onClick={() => toast.success("CSV berhasil diunduh", { description: "siapi-hotspot.csv" })}>
+          <Button variant="outline" onClick={() => toast.success("CSV berhasil diunduh", { description: "suar-hotspot.csv" })}>
             Toast
           </Button>
         </div>

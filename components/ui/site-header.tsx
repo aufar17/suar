@@ -15,11 +15,11 @@ export async function SiteHeader() {
         <Link
           href="/"
           className="-ml-1 flex h-10 shrink-0 items-center gap-2.5 rounded-lg px-1"
-          aria-label="SiAPI, ke halaman peta"
+          aria-label="Suar, ke halaman peta"
         >
           <LogoMark className="size-7" />
           <span className="flex items-baseline gap-2">
-            <span className="text-[15px] font-semibold tracking-tight">SiAPI</span>
+            <span className="text-[15px] font-semibold tracking-tight">suar</span>
             <span className="hidden text-xs text-muted-foreground xl:inline">Karhutla Indonesia</span>
           </span>
         </Link>

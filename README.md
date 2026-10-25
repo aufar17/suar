@@ -1,8 +1,8 @@
-# SiAPI – Frontend
+# Suar – Frontend
 
 Dashboard web untuk memantau hotspot dan memprediksi risiko kebakaran hutan dan lahan (karhutla) di seluruh Indonesia
 (34 provinsi, 514 kabupaten/kota).
-Repo ini hanya berisi frontend. Data dihasilkan pipeline Python terpisah (`siapi-pipeline`) dan disimpan di Supabase
+Repo ini hanya berisi frontend. Data dihasilkan pipeline Python terpisah (`suar-pipeline`) dan disimpan di Supabase
 (PostgreSQL + PostGIS). Selama pipeline belum siap, aplikasi memakai data mock dari folder `mock/`.
 
 **Stack:** Next.js 16 (App Router, Cache Components) · React 19 · TypeScript strict · Tailwind CSS 4 ·

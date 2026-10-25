@@ -1,4 +1,4 @@
-/** SiAPI mark: a flame over a 5 km grid. Colors follow the theme tokens. */
+/** Suar mark: a flame over a 5 km grid. Colors follow the theme tokens. */
 export function LogoMark({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 32 32" className={className} aria-hidden="true" focusable="false">

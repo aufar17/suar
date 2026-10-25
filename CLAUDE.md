@@ -1,8 +1,8 @@
-# SiAPI Frontend – Konteks Proyek
+# Suar Frontend – Konteks Proyek
 
 ## Tentang Proyek
 
-SiAPI (Sistem Analisis & Prediksi Karhutla) adalah dashboard web untuk memantau dan memprediksi kebakaran hutan dan lahan (karhutla) di **seluruh Indonesia** (34 provinsi, 514 kabupaten/kota; batas dari geoBoundaries, lihat `pnpm geo:build`). Repo ini hanya berisi **frontend**. Data dihasilkan oleh pipeline Python terpisah (repo `siapi-pipeline`) yang menyimpan hasilnya ke Supabase (PostgreSQL + PostGIS).
+Suar (tagline: "Peringatan dini kebakaran hutan dan lahan") adalah dashboard web untuk memantau dan memprediksi kebakaran hutan dan lahan (karhutla) di **seluruh Indonesia** (34 provinsi, 514 kabupaten/kota; batas dari geoBoundaries, lihat `pnpm geo:build`). Repo ini hanya berisi **frontend**. Data dihasilkan oleh pipeline Python terpisah (repo `suar-pipeline`) yang menyimpan hasilnya ke Supabase (PostgreSQL + PostGIS).
 
 Selama pipeline belum siap, frontend memakai **data mock**. Semua akses data harus lewat satu lapisan data (`lib/data/`) supaya nanti cukup mengganti implementasinya ke Supabase tanpa mengubah komponen.
 
@@ -49,7 +49,7 @@ Rencana kerja lengkap ada di `PLAN.md`. Kerjakan **satu fase per sesi**, kecuali
 - **Grafik:** seri tunggal = ember; perbandingan tahun = ember / teal / biru (dua tahun lalu bergaris putus). Palet baru wajib divalidasi (skill dataviz) untuk terang dan gelap. Setiap grafik punya tabel data (`ChartTable`).
 - **Tipografi:** Geist Sans untuk teks; Geist Mono (`font-mono`) untuk angka, skor, kode grid, dan sumbu grafik.
 - **Bentuk:** radius kartu/panel 12–16 px (`rounded-xl`/`rounded-2xl`), border tipis, bayangan halus (`shadow-xs`, `shadow-[var(--shadow-panel)]`).
-- **Tema:** next-themes (`attribute="class"`, default `system`, kunci `siapi-theme`). Komponen client yang butuh nama tema memakai `useResolvedTheme()` dari `components/ui/theme.tsx`. Mode gelap punya nilai token sendiri, bukan inversi.
+- **Tema:** next-themes (`attribute="class"`, default `system`, kunci `suar-theme`). Komponen client yang butuh nama tema memakai `useResolvedTheme()` dari `components/ui/theme.tsx`. Mode gelap punya nilai token sendiri, bukan inversi.
 - **Animasi:** hanya untuk memperjelas perubahan, 150–300 ms, dan hanya pada panel/elemen UI (`motion`). Lapisan peta tidak dianimasikan: ganti hari prediksi (termasuk play) cukup mengganti feature-state. `MotionConfig reducedMotion="user"` dan aturan CSS `prefers-reduced-motion` mematikan gerakan; kamera peta (`fitBounds`/`easeTo`) berdurasi 0 dan `fadeDuration` label 0 bila reduced motion.
 - **Aksesibilitas:** kontras teks ≥ 4,5:1 (elemen UI ≥ 3:1), fokus keyboard selalu terlihat (`ring`), tombol ikon wajib `aria-label`, target sentuh ≥ 44 px di perangkat sentuh (`pointer-coarse:`). Cek dengan axe sebelum menyatakan perubahan UI selesai.
 - **Responsif:** uji di 360, 768, 1024, 1440 px tanpa scroll horizontal. Peta: tata letak desktop mulai `lg` (1024 px); di bawahnya kontrol pindah ke Drawer dan detail ke Drawer bawah.

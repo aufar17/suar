@@ -1,6 +1,6 @@
-# Rencana Pengerjaan Frontend SiAPI
+# Rencana Pengerjaan Frontend Suar
 
-Dokumen ini adalah rencana eksekusi untuk Claude Code. Baca `CLAUDE.md` dulu untuk konteks dan aturan proyek.
+Dokumen ini adalah rencana eksekusi untuk Claude Code di repo `suar-frontend`. Baca `CLAUDE.md` dulu untuk konteks dan aturan proyek.
 
 Cara kerja:
 
@@ -335,7 +335,7 @@ Pipeline belum tentu siap saat fase ini dikerjakan. Tujuannya menyiapkan supaya 
 
 ## Di Luar Cakupan Repo Ini
 
-- Pengambilan data FIRMS/Open-Meteo, clustering, training dan prediksi model (dikerjakan di repo `siapi-pipeline`).
+- Pengambilan data FIRMS/Open-Meteo, clustering, training dan prediksi model (dikerjakan di repo `suar-pipeline`).
 - Notifikasi Telegram.
 - Autentikasi pengguna.
 
@@ -394,7 +394,7 @@ _(Diisi oleh Claude Code selama pengerjaan.)_
 **Redesign (R1–R7, branch `refactor-design`)**
 
 - *R1 – Fondasi.* shadcn/ui gaya `new-york` (Radix lewat paket `radix-ui`), dipasang dengan `components.json` manual karena proyek memakai loader `@tailwindcss/turbopack`, bukan PostCSS. Komponen hasil CLI sedikit diubah: cincin fokus memakai warna `ring` penuh (bukan 50%), tombol 40 px dan minimal 44 px di perangkat sentuh (`pointer-coarse:`), varian tombol `ember`, switch lebih besar dengan track "off" `--control-off` (kontras ≥ 3:1), thumb slider dengan area sentuh diperluas, teks bawaan ("Close", judul command palette) diterjemahkan, dan `DialogTitle` command palette dipindah ke dalam `DialogContent` (peringatan aksesibilitas Radix).
-- Tema memakai **next-themes** (`attribute="class"`, default `system`) dengan kunci penyimpanan lama `siapi-theme`, sehingga pilihan tema pengguna sebelumnya tetap terbaca. Skrip tema buatan sendiri dihapus.
+- Tema memakai **next-themes** (`attribute="class"`, default `system`) dengan kunci penyimpanan `suar-theme`. Skrip tema buatan sendiri dihapus.
 - Token warna ditulis sebagai CSS variables (hex, bukan oklch, supaya mudah dicek kontrasnya) di `app/globals.css`, dengan nama shadcn (`background`, `muted-foreground`, …) ditambah `ember`, `ember-ink` (teks aksen yang lolos 4,5:1), `glass`, `risk-*`, `map-*`, `chart-*`. Kontras dicek dengan skrip: teks muted 6,0–7,8:1, `ember-ink` ≥ 4,7:1, teks di atas badge risiko ≥ 4,8:1.
 - **Sangat tinggi di mode gelap memakai #DC2626**, bukan #B91C1C: #B91C1C hanya 3,07:1 terhadap latar gelap sehingga sulit dibedakan dari basemap gelap; #DC2626 4,12:1 dan teks putih di atasnya tetap 4,83:1. `getRiskColor(level, theme)` di `lib/risk.ts` mengikuti token ini.
 - `Aksen` shadcn (`--accent`) tetap berarti latar hover netral; warna aksen merek bernama `ember` agar tidak bentrok.
@@ -478,7 +478,7 @@ _(Diisi oleh Claude Code selama pengerjaan.)_
 - **Skala zoom bergeser satu tingkat.** MapLibre memakai tile 512 px, jadi zoom MapLibre *z* = zoom Leaflet *z + 1* untuk skala yang sama. Ambang lama (Leaflet) 7 dan 9 menjadi 6 dan 8; zoom minimum 3, maksimum 17. Fokus wilayah: maks. zoom 8 (provinsi) / 10 (kabupaten).
 - **Basemap: OpenFreeMap** (`positron` untuk terang, `dark` untuk gelap; vektor, tanpa API key, data OpenStreetMap/OpenMapTiles). URL style bisa diganti lewat `NEXT_PUBLIC_MAP_STYLE_LIGHT` / `NEXT_PUBLIC_MAP_STYLE_DARK`; bila style gagal dimuat dipakai style kosong agar lapisan data tetap tampil. Filter CSS pada peta dihapus; ganti tema = `setStyle` penuh (`styleDiffing={false}`), lalu `<Source>`/`<Layer>` react-map-gl menambahkan dirinya lagi saat `styledata`.
 - **Label diatur lewat style**, bukan bawaan basemap: semua layer simbol basemap dipindah ke atas lapisan non-label, dan label tempat (`place` OpenMapTiles) diganti layer sendiri dengan nama Indonesia (`name:id`) dan halo: kota mulai zoom 6, kota kecil 9, kecamatan (`suburb`) 10, desa 11, dusun 13, negara sampai zoom 8. Nama provinsi (semua zoom) dan kabupaten/kota (mulai 6,5) diambil dari titik label batas wilayah kita sendiri, jadi `state` dari basemap tidak dipakai (menghindari dua nama untuk satu provinsi).
-- **Urutan lapisan lewat slot.** Style yang disiapkan (`components/map/basemap.ts`) berisi layer kosong `siapi-slot-*` (background, `visibility: none`); setiap layer data dipasang `beforeId` slot-nya sehingga urutan tetap sama setelah ganti style: wilayah → gambut → risiko → batas → fokus → zona → sorotan → hotspot → *label basemap* → label wilayah → kelompok hotspot → sorotan hotspot. Isian dan garis berada di bawah label; kelompok hotspot berangka di atas label agar angkanya terbaca.
+- **Urutan lapisan lewat slot.** Style yang disiapkan (`components/map/basemap.ts`) berisi layer kosong `suar-slot-*` (background, `visibility: none`); setiap layer data dipasang `beforeId` slot-nya sehingga urutan tetap sama setelah ganti style: wilayah → gambut → risiko → batas → fokus → zona → sorotan → hotspot → *label basemap* → label wilayah → kelompok hotspot → sorotan hotspot. Isian dan garis berada di bawah label; kelompok hotspot berangka di atas label agar angkanya terbaca.
 - Interaksi: satu pipeline per peta (`components/map/interactions.tsx`) — `queryRenderedFeatures` sekali per frame animasi, hanya objek teratas yang bereaksi (seperti `bubblingMouseEvents: false` di Leaflet), hover lewat feature-state, satu elemen tooltip yang isinya dibuat ulang hanya saat objek berganti. Isi tooltip tetap dari `tooltipHtml`.
 - Gaya garis zona: `line-dasharray` MapLibre dalam satuan lebar garis, jadi pola piksel di `ZONE_STYLES` (dipakai juga oleh glyph legenda) dibagi lebar garisnya.
 - *P2 – Lapisan data di GPU.* **Hotspot**: satu source GeoJSON `cluster: true` (radius 50 px, minimal 3 titik, `clusterMaxZoom` 7, properti `frp_maks`), berisi hotspot seluruh Indonesia untuk rentang dan kepercayaan terpilih; pengelompokan berjalan di worker MapLibre. Endpoint `/api/hotspots/groups` dan dependensi `supercluster` dihapus. Kepercayaan memakai warna lewat ekspresi (`circle-color` = warna hotspot dengan alfa 50/80/100%, jadi tampilan "kepekatan" tetap), ukuran dari FRP. Klik kelompok → `getClusterExpansionZoom`.

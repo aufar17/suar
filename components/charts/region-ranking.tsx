@@ -30,7 +30,7 @@ export function RegionRanking({
   highlight,
   hotspotPeriod,
   riskDateLabel,
-  filename = "siapi-peringkat-wilayah.csv",
+  filename = "suar-peringkat-wilayah.csv",
   limit,
 }: {
   stats: RegionStat[];

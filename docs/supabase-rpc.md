@@ -1,7 +1,7 @@
-# Kontrak Data Supabase untuk Frontend SiAPI
+# Kontrak Data Supabase untuk Frontend Suar
 
 Dokumen ini menjelaskan objek database yang dibaca `lib/data/supabase.ts` saat `DATA_SOURCE=supabase`. Pipeline
-(`siapi-pipeline`) bertanggung jawab membuat tabel, view, dan fungsi di bawah ini. Frontend hanya **membaca** data
+(`suar-pipeline`) bertanggung jawab membuat tabel, view, dan fungsi di bawah ini. Frontend hanya **membaca** data
 dengan anon key, jadi semua objek harus bisa dibaca role `anon` (aktifkan RLS dengan policy `select` saja).
 
 Cakupan data adalah **seluruh Indonesia**: 34 provinsi dan 514 kabupaten/kota (batas dari geoBoundaries, lihat

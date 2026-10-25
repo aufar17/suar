@@ -22,7 +22,7 @@ const TOP_SLOTS = ["label", "kelompok", "sorotan-titik"] as const;
 export type MapSlot = (typeof DATA_SLOTS)[number] | (typeof TOP_SLOTS)[number];
 
 export function slotId(slot: MapSlot): string {
-  return `siapi-slot-${slot}`;
+  return `suar-slot-${slot}`;
 }
 
 function slotLayer(slot: MapSlot): LayerSpecification {
@@ -75,7 +75,7 @@ function placeLabelLayers(source: string, theme: Theme, fonts: MapFonts): LayerS
     size: ExpressionSpecification | number,
     options: { font?: string[]; color?: string; maxzoom?: number; uppercase?: boolean } = {},
   ): LayerSpecification => ({
-    id: `siapi-place-${id}`,
+    id: `suar-place-${id}`,
     type: "symbol",
     source,
     "source-layer": "place",

@@ -23,7 +23,7 @@ export default function GlobalError({ reset }: { error: Error & { digest?: strin
       </head>
       <body>
         <main>
-          <h1>SiAPI tidak dapat dimuat</h1>
+          <h1>Suar tidak dapat dimuat</h1>
           <p>Terjadi kesalahan pada aplikasi. Silakan coba lagi beberapa saat lagi.</p>
           <button type="button" onClick={reset}>
             Coba lagi

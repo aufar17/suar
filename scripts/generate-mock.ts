@@ -1,5 +1,5 @@
 /**
- * Generates deterministic mock data for SiAPI (all of Indonesia) into `mock/`.
+ * Generates deterministic mock data for Suar (all of Indonesia) into `mock/`.
  *
  *   pnpm geo:build                         # once: boundaries in mock/kabupaten.geojson, provinsi.geojson
  *   pnpm mock:generate                     # latest data date = DEFAULT_END_DATE

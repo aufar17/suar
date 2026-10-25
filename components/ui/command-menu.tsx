@@ -20,7 +20,7 @@ import { useJson } from "@/lib/use-json";
 import type { RegionIndexItem } from "@/types";
 import { NAV_ITEMS } from "./nav-items";
 
-const OPEN_EVENT = "siapi:command-menu";
+const OPEN_EVENT = "suar:command-menu";
 
 /** Opens the command palette from anywhere (e.g. a "search regions" button on a page). */
 export function openCommandMenu() {

@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-export const alt = "SiAPI – Pemantauan & Prediksi Karhutla Indonesia";
+export const alt = "Suar – Pemantauan & Prediksi Karhutla Indonesia";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -42,7 +42,7 @@ export default function OpenGraphImage() {
             >
               <div style={{ width: 28, height: 36, borderRadius: "50% 50% 45% 45%", background: "#C2521F" }} />
             </div>
-            <div style={{ fontSize: 64, fontWeight: 700 }}>SiAPI</div>
+            <div style={{ fontSize: 64, fontWeight: 700 }}>suar</div>
           </div>
           <div style={{ fontSize: 40, fontWeight: 600, marginTop: 32, lineHeight: 1.2 }}>
             Pemantauan &amp; Prediksi Karhutla Indonesia

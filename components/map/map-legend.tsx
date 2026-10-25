@@ -287,7 +287,7 @@ export function LegendContent({
             {mock ? " · data contoh" : ""}
           </p>
         ) : null}
-        <p>Sumber: NASA FIRMS (hotspot), model prediksi SiAPI (risiko), geoBoundaries (batas wilayah).</p>
+        <p>Sumber: NASA FIRMS (hotspot), model prediksi Suar (risiko), geoBoundaries (batas wilayah).</p>
         <p className="flex items-start gap-1.5 text-foreground">
           <Info aria-hidden="true" className="mt-px size-3 shrink-0" />
           Hotspot belum tentu kebakaran terkonfirmasi.

@@ -1,5 +1,5 @@
 /** Custom event asking the dashboard map to zoom to a region (detail = slug). */
-export const FOCUS_REGION_EVENT = "siapi:focus-region";
+export const FOCUS_REGION_EVENT = "suar:focus-region";
 
 /** Zooms the dashboard map (if mounted) to a province or regency. */
 export function focusRegionOnMap(slug: string) {

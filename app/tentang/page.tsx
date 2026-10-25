@@ -24,7 +24,7 @@ import { RISK_LEVEL_ORDER, RISK_THRESHOLDS } from "@/lib/risk";
 
 export const metadata: Metadata = {
   title: "Tentang",
-  description: "Tujuan, sumber data, metode, dan keterbatasan SiAPI, sistem pemantauan dan prediksi karhutla di seluruh Indonesia.",
+  description: "Tujuan, sumber data, metode, dan keterbatasan Suar, sistem pemantauan dan prediksi karhutla di seluruh Indonesia.",
 };
 
 const SECTIONS = [
@@ -156,12 +156,12 @@ export default async function TentangPage() {
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-10 sm:py-14 lg:px-8">
       <header className="max-w-3xl">
-        <p className="text-sm font-medium text-ember-ink">Tentang SiAPI</p>
+        <p className="text-sm font-medium text-ember-ink">Tentang Suar</p>
         <h1 className="mt-2 text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
           Melihat api lebih awal, sebelum membesar.
         </h1>
         <p className="mt-5 text-lg leading-8 text-pretty text-muted-foreground">
-          SiAPI (Sistem Analisis &amp; Prediksi Karhutla) memantau titik panas dan memperkirakan risiko kebakaran hutan dan
+          Suar adalah peringatan dini kebakaran hutan dan lahan: memantau titik panas dan memperkirakan risiko kebakaran hutan dan
           lahan di seluruh Indonesia, dari tingkat provinsi sampai kotak 5 km, untuk tujuh hari ke depan.
         </p>
         {status.sumber === "mock" ? (
@@ -180,7 +180,7 @@ export default async function TentangPage() {
         <div className="flex max-w-3xl min-w-0 flex-col gap-12">
           <Section id="tujuan" eyebrow="01" title="Tujuan">
             <p>
-              Kebakaran di lahan gambut sulit dipadamkan begitu membesar. SiAPI membantu petugas, pemerintah daerah, dan
+              Kebakaran di lahan gambut sulit dipadamkan begitu membesar. Suar membantu petugas, pemerintah daerah, dan
               masyarakat melihat <em>di mana</em> api sedang terdeteksi dan <em>di mana</em> kondisi paling mendukung
               terjadinya kebakaran, sehingga patroli dan pencegahan bisa diarahkan lebih awal.
             </p>

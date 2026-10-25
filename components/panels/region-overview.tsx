@@ -277,7 +277,7 @@ export async function RegionOverview({ slug }: { slug: string }) {
             highlight={null}
             hotspotPeriod={`${formatDate(start30)} – ${formatDate(today)}`}
             riskDateLabel={formatDayShort(tomorrow.date)}
-            filename={`siapi-peringkat-kabupaten-${slug}.csv`}
+            filename={`suar-peringkat-kabupaten-${slug}.csv`}
           />
         </Card>
       ) : null}

@@ -117,7 +117,7 @@ async function StatsContent({ searchParams }: { searchParams: PageProps<"/statis
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <RegionSelect regions={regions} provinsi={province?.slug ?? null} kabupaten={regency?.slug ?? null} />
           <DownloadCsvButton
-            filename={`siapi-hotspot-bulanan-${slug ?? "indonesia"}.csv`}
+            filename={`suar-hotspot-bulanan-${slug ?? "indonesia"}.csv`}
             header={["bulan", "wilayah", "jumlah_hotspot"]}
             rows={trend.map((d) => [d.bulan, slug ?? "indonesia", d.jumlah_hotspot])}
           />
@@ -217,7 +217,7 @@ async function StatsContent({ searchParams }: { searchParams: PageProps<"/statis
               highlight={province?.slug ?? null}
               hotspotPeriod={hotspotPeriod}
               riskDateLabel={riskDateLabel}
-              filename="siapi-peringkat-provinsi.csv"
+              filename="suar-peringkat-provinsi.csv"
             />
           </TabsContent>
           <TabsContent value="kabupaten" className="flex flex-col gap-3">
@@ -231,7 +231,7 @@ async function StatsContent({ searchParams }: { searchParams: PageProps<"/statis
               highlight={regency?.slug ?? null}
               hotspotPeriod={hotspotPeriod}
               riskDateLabel={riskDateLabel}
-              filename={`siapi-peringkat-kabupaten-${province?.slug ?? "indonesia"}.csv`}
+              filename={`suar-peringkat-kabupaten-${province?.slug ?? "indonesia"}.csv`}
               limit={province ? undefined : NATIONAL_REGENCY_LIMIT}
             />
           </TabsContent>

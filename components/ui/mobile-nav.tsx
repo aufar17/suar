@@ -59,7 +59,7 @@ export function MobileNav({ footer }: { footer?: ReactNode }) {
       <SheetContent side="right" className="w-[min(20rem,85vw)] gap-0 p-0">
         <SheetHeader className="border-b px-4 py-3">
           <SheetTitle className="flex items-center gap-2 text-base">
-            <LogoMark className="size-7" /> SiAPI
+            <LogoMark className="size-7" /> suar
           </SheetTitle>
           <SheetDescription className="text-xs">Pemantauan &amp; prediksi karhutla Indonesia</SheetDescription>
         </SheetHeader>
